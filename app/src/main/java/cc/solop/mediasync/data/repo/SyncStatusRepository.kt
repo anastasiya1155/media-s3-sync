@@ -4,15 +4,13 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import cc.solop.mediasync.data.store.appDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-
-private val Context.dataStore by preferencesDataStore(name = "media_sync_prefs")
 
 @Serializable
 data class FailedUploadItem(
@@ -40,7 +38,7 @@ class SyncStatusRepository(private val context: Context) {
     private val keyFailedItems = stringPreferencesKey("failed_items_json")
     private val keyLastScanEpochMs = longPreferencesKey("last_scan_epoch_ms")
 
-    val statusFlow: Flow<SyncStatus> = context.dataStore.data.map { prefs ->
+    val statusFlow: Flow<SyncStatus> = context.appDataStore.data.map { prefs ->
         val failedItems = prefs[keyFailedItems]
             ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
             ?: emptyList()
@@ -56,25 +54,25 @@ class SyncStatusRepository(private val context: Context) {
     }
 
     suspend fun incrementQueued(by: Long) {
-        context.dataStore.edit { prefs ->
+        context.appDataStore.edit { prefs ->
             prefs[keyQueued] = (prefs[keyQueued] ?: 0) + by
         }
     }
 
     suspend fun incrementUploaded() {
-        context.dataStore.edit { prefs ->
+        context.appDataStore.edit { prefs ->
             prefs[keyUploaded] = (prefs[keyUploaded] ?: 0) + 1
         }
     }
 
     suspend fun incrementDuplicate() {
-        context.dataStore.edit { prefs ->
+        context.appDataStore.edit { prefs ->
             prefs[keyDuplicate] = (prefs[keyDuplicate] ?: 0) + 1
         }
     }
 
     suspend fun incrementFailed(uri: String, reason: String) {
-        context.dataStore.edit { prefs ->
+        context.appDataStore.edit { prefs ->
             prefs[keyFailed] = (prefs[keyFailed] ?: 0) + 1
             val existing = prefs[keyFailedItems]
                 ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
@@ -89,7 +87,7 @@ class SyncStatusRepository(private val context: Context) {
     }
 
     suspend fun setLastScanEpochMs(epochMs: Long) {
-        context.dataStore.edit { prefs ->
+        context.appDataStore.edit { prefs ->
             prefs[keyLastScanEpochMs] = epochMs
         }
     }
