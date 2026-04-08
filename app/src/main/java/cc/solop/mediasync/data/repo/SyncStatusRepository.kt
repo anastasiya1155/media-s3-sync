@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 private val Context.dataStore by preferencesDataStore(name = "media_sync_prefs")
@@ -80,7 +81,10 @@ class SyncStatusRepository(private val context: Context) {
                 ?: emptyList()
             val updated = (listOf(FailedUploadItem(uri, reason, System.currentTimeMillis())) + existing)
                 .take(MAX_FAILED_ITEMS)
-            prefs[keyFailedItems] = json.encodeToString(updated)
+            prefs[keyFailedItems] = json.encodeToString(
+                ListSerializer(FailedUploadItem.serializer()),
+                updated
+            )
         }
     }
 
