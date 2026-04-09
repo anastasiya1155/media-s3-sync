@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
@@ -61,6 +62,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -88,6 +90,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.videoFrameMillis
 import retrofit2.HttpException
 
 class MainActivity : ComponentActivity() {
@@ -143,6 +147,7 @@ class SyncStatusViewModel(
         val uri: String,
         val filename: String,
         val bucketName: String,
+        val mimeType: String,
         val mediaId: Long,
         val dateAddedSec: Long,
         val isSynced: Boolean,
@@ -262,6 +267,7 @@ class SyncStatusViewModel(
                         uri = item.uri,
                         filename = item.filename,
                         bucketName = item.bucketName,
+                        mimeType = item.mimeType,
                         mediaId = item.mediaId,
                         dateAddedSec = item.dateAddedSec,
                         isSynced = syncedUris.contains(item.uri) || coveredByScanCursor,
@@ -727,6 +733,17 @@ private fun SyncDashboardScreen(
 private fun LocalMediaPreviewCard(
     item: SyncStatusViewModel.LocalMediaStatus,
 ) {
+    val context = LocalContext.current
+    val isVideo = item.mimeType.startsWith("video/")
+    val previewRequest = ImageRequest.Builder(context)
+        .data(item.uri)
+        .apply {
+            if (isVideo) {
+                videoFrameMillis(1_000)
+            }
+        }
+        .build()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -735,13 +752,30 @@ private fun LocalMediaPreviewCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = item.uri,
+                model = previewRequest,
                 contentDescription = item.filename,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 120.dp),
                 contentScale = ContentScale.Crop,
             )
+            if (isVideo) {
+                Surface(
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.Center)
+                        .size(28.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                ) {
+                    Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
             Surface(
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.TopEnd)

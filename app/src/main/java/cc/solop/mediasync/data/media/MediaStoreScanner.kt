@@ -14,6 +14,7 @@ class MediaStoreScanner(private val context: Context) {
         val uri: String,
         val filename: String,
         val bucketName: String,
+        val mimeType: String,
         val mediaId: Long,
         val dateAddedSec: Long,
     )
@@ -97,6 +98,7 @@ class MediaStoreScanner(private val context: Context) {
             MediaStore.Files.FileColumns._ID,
             MediaStore.Files.FileColumns.DISPLAY_NAME,
             MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+            MediaStore.Files.FileColumns.MIME_TYPE,
             MediaStore.Files.FileColumns.DATE_ADDED,
             MediaStore.Files.FileColumns.MEDIA_TYPE,
         )
@@ -113,6 +115,7 @@ class MediaStoreScanner(private val context: Context) {
             val idIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
             val nameIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
             val bucketIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME)
+            val mimeIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
             val addedIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
 
             while (cursor.moveToNext() && results.size < limit) {
@@ -120,11 +123,13 @@ class MediaStoreScanner(private val context: Context) {
                 val uri = ContentUris.withAppendedId(collection, id).toString()
                 val filename = cursor.getString(nameIx) ?: "media_$id"
                 val bucket = cursor.getString(bucketIx) ?: "Unknown"
+                val mimeType = cursor.getString(mimeIx) ?: "application/octet-stream"
                 val addedSec = cursor.getLong(addedIx)
                 results += LocalMediaItem(
                     uri = uri,
                     filename = filename,
                     bucketName = bucket,
+                    mimeType = mimeType,
                     mediaId = id,
                     dateAddedSec = addedSec,
                 )
