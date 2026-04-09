@@ -3,8 +3,11 @@ package cc.solop.mediasync.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +99,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
@@ -209,6 +213,8 @@ class SyncStatusViewModel(
     val isLoadingLocalMedia: StateFlow<Boolean> = _isLoadingLocalMedia
     private val _isSyncPaused = MutableStateFlow(false)
     val isSyncPaused: StateFlow<Boolean> = _isSyncPaused
+    private var mediaStoreObserver: ContentObserver? = null
+    private var mediaStoreDebounceJob: Job? = null
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -246,6 +252,41 @@ class SyncStatusViewModel(
             resumeSync()
         } else {
             stopSync()
+        }
+    }
+
+    fun startObservingMediaStore() {
+        if (mediaStoreObserver != null) return
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                onMediaStoreChanged()
+            }
+
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                onMediaStoreChanged()
+            }
+        }
+        appContext.contentResolver.registerContentObserver(
+            MediaStore.Files.getContentUri("external"),
+            true,
+            observer,
+        )
+        mediaStoreObserver = observer
+    }
+
+    fun stopObservingMediaStore() {
+        mediaStoreObserver?.let { appContext.contentResolver.unregisterContentObserver(it) }
+        mediaStoreObserver = null
+        mediaStoreDebounceJob?.cancel()
+        mediaStoreDebounceJob = null
+    }
+
+    private fun onMediaStoreChanged() {
+        mediaStoreDebounceJob?.cancel()
+        mediaStoreDebounceJob = viewModelScope.launch {
+            delay(700)
+            WorkScheduler.enqueueScanNow(appContext)
+            loadLocalMedia()
         }
     }
 
@@ -375,7 +416,16 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
             vm.validateTokenOnLoad()
-            vm.loadLocalMedia()
+            vm.syncNow()
+        }
+    }
+
+    DisposableEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            vm.startObservingMediaStore()
+        }
+        onDispose {
+            vm.stopObservingMediaStore()
         }
     }
 
