@@ -9,7 +9,7 @@ import java.time.format.DateTimeFormatter
 
 class MediaStoreScanner(private val context: Context) {
 
-    fun scanNewMedia(sinceEpochMsExclusive: Long): List<MediaCandidate> {
+    fun scanNewMedia(sinceEpochMsExclusive: Long, limit: Int = Int.MAX_VALUE): List<MediaCandidate> {
         val imageItems = queryCollection(
             collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             idColumn = MediaStore.Images.Media._ID,
@@ -30,7 +30,9 @@ class MediaStoreScanner(private val context: Context) {
             dateTakenColumn = MediaStore.Video.Media.DATE_TAKEN,
             sinceEpochMsExclusive = sinceEpochMsExclusive,
         )
-        return (imageItems + videoItems).sortedBy { it.capturedAtIso }
+        return (imageItems + videoItems)
+            .sortedBy { it.dateAddedEpochMs }
+            .take(limit)
     }
 
     private fun queryCollection(
@@ -81,6 +83,7 @@ class MediaStoreScanner(private val context: Context) {
                     mimeType = mimeType,
                     capturedAtIso = ISO_INSTANT.format(Instant.ofEpochMilli(capturedAtMs)),
                     sizeBytes = sizeBytes,
+                    dateAddedEpochMs = dateAddedMs,
                 )
             }
         }

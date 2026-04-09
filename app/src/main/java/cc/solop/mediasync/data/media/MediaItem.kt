@@ -8,6 +8,7 @@ data class MediaCandidate(
     val mimeType: String,
     val capturedAtIso: String,
     val sizeBytes: Long,
+    val dateAddedEpochMs: Long = 0L,
 ) {
     val stableId: String
         get() {

@@ -16,18 +16,30 @@ class MediaScanWorker(
 
         return try {
             val lastScan = statusRepo.getLastScanEpochMs()
-            val candidates = services.mediaStoreScanner.scanNewMedia(lastScan)
+            val candidates = services.mediaStoreScanner.scanNewMedia(lastScan, BATCH_SIZE)
             candidates.forEach { WorkScheduler.enqueueUpload(applicationContext, it) }
 
             if (candidates.isNotEmpty()) {
                 statusRepo.incrementQueued(candidates.size.toLong())
+                val maxSeenDateAdded = candidates.maxOf { it.dateAddedEpochMs }
+                // Step back 1s because MediaStore query uses seconds precision.
+                val nextWatermark = (maxSeenDateAdded - 1000L).coerceAtLeast(0L)
+                statusRepo.setLastScanEpochMs(nextWatermark)
+                if (candidates.size == BATCH_SIZE) {
+                    WorkScheduler.enqueueScanNow(applicationContext)
+                }
+            } else {
+                statusRepo.setLastScanEpochMs(System.currentTimeMillis())
             }
-            statusRepo.setLastScanEpochMs(System.currentTimeMillis())
             Result.success()
         } catch (_: SecurityException) {
             Result.failure()
         } catch (_: Exception) {
             Result.retry()
         }
+    }
+
+    private companion object {
+        const val BATCH_SIZE = 100
     }
 }
