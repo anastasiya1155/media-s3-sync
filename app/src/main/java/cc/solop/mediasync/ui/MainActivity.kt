@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
@@ -660,7 +661,7 @@ private fun SyncDashboardScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onStartFreshSync, modifier = Modifier.weight(1f)) {
-                    Text("Clear Statuses & Start Fresh")
+                    Text("Reset")
                 }
                 OutlinedButton(onClick = onToggleSyncPause) {
                     Icon(
@@ -668,10 +669,11 @@ private fun SyncDashboardScreen(
                         contentDescription = if (isSyncPaused) "Resume sync" else "Pause sync",
                     )
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
-                    Text("Log out")
+                OutlinedButton(onClick = onLogout, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = "Log out",
+                    )
                 }
             }
 
@@ -684,8 +686,11 @@ private fun SyncDashboardScreen(
                         .padding(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("Library sync status (Gallery)", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Sync Status", style = MaterialTheme.typography.titleMedium)
                         IconButton(onClick = onRefreshMediaStatus) {
                             Icon(Icons.Filled.Refresh, contentDescription = "Refresh gallery")
                         }
