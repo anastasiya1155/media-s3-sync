@@ -1,12 +1,10 @@
 package cc.solop.mediasync.data.api
 
-import com.squareup.moshi.JsonClass
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
 
-@JsonClass(generateAdapter = true)
 data class MediaActionRequest(
     val action: String,
     val filename: String? = null,
@@ -18,14 +16,12 @@ data class MediaActionRequest(
     val reason: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class MediaActionResponse(
     val duplicate: Boolean? = null,
     val uploadUrl: String? = null,
     val key: String? = null,
 )
 
-@JsonClass(generateAdapter = true)
 data class MediaListItem(
     val key: String,
     val mimeType: String,
@@ -34,7 +30,6 @@ data class MediaListItem(
     val sha256: String,
 )
 
-@JsonClass(generateAdapter = true)
 data class MediaListResponse(
     val items: List<MediaListItem> = emptyList(),
     val pageToken: String? = null,

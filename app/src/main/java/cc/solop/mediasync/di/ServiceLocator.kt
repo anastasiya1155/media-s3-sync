@@ -8,6 +8,7 @@ import cc.solop.mediasync.data.media.MediaStoreScanner
 import cc.solop.mediasync.data.repo.SyncStatusRepository
 import cc.solop.mediasync.domain.UploadOrchestrator
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -36,10 +37,13 @@ class ServiceLocator private constructor(private val appContext: Context) {
     }
 
     val mediaApi: MediaApi by lazy {
+        val moshi = Moshi.Builder()
+            .add(KotlinJsonAdapterFactory())
+            .build()
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(Moshi.Builder().build()))
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(MediaApi::class.java)
     }
