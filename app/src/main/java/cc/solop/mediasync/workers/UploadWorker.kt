@@ -1,6 +1,7 @@
 package cc.solop.mediasync.workers
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
@@ -22,17 +23,21 @@ class UploadWorker(
         val token = services.tokenStore.getCachedToken().trim()
 
         if (token.isBlank()) {
+            Log.e(TAG, "Upload failed: missing token, uri=${candidate.uri}")
             statusRepo.incrementFailed(candidate.uri, "Missing auth token. Save token and tap Retry Failed.")
             return Result.failure()
         }
 
         return try {
+            Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
             when (services.uploadOrchestrator.upload(candidate)) {
                 UploadResult.Uploaded -> statusRepo.incrementUploaded()
                 UploadResult.Duplicate -> statusRepo.incrementDuplicate()
             }
+            Log.d(TAG, "Upload success, uri=${candidate.uri}")
             Result.success()
         } catch (e: RetryableUploadException) {
+            Log.w(TAG, "Retryable upload failure, uri=${candidate.uri}, attempt=${runAttemptCount + 1}: ${e.message}", e)
             if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
                 statusRepo.incrementFailed(candidate.uri, "Retry limit reached: ${e.message ?: "Unknown error"}")
                 Result.failure()
@@ -40,9 +45,11 @@ class UploadWorker(
                 Result.retry()
             }
         } catch (e: PermanentUploadException) {
+            Log.e(TAG, "Permanent upload failure, uri=${candidate.uri}: ${e.message}", e)
             statusRepo.incrementFailed(candidate.uri, e.message ?: "Permanent failure")
             Result.failure()
         } catch (e: Exception) {
+            Log.e(TAG, "Unexpected upload failure, uri=${candidate.uri}: ${e.message}", e)
             if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
                 statusRepo.incrementFailed(candidate.uri, "Unexpected error: ${e.message ?: "Unknown error"}")
                 Result.failure()
@@ -53,6 +60,7 @@ class UploadWorker(
     }
 
     companion object {
+        private const val TAG = "UploadWorker"
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val KEY_URI = "uri"
         private const val KEY_FILENAME = "filename"

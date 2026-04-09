@@ -100,7 +100,10 @@ class UploadOrchestrator(
 
         uploadHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IOException("PUT failed with code ${response.code}")
+                val responseBody = runCatching { response.body?.string().orEmpty() }
+                    .getOrDefault("")
+                    .take(200)
+                throw IOException("PUT failed with code ${response.code}, message=${response.message}, body=$responseBody")
             }
         }
     }
@@ -120,10 +123,14 @@ class UploadOrchestrator(
     private fun classifyApiException(prefix: String, throwable: Throwable): Exception {
         return when (throwable) {
             is HttpException -> {
+                val errorBody = runCatching { throwable.response()?.errorBody()?.string().orEmpty() }
+                    .getOrDefault("")
+                    .take(200)
+                val enrichedMessage = "$prefix (${throwable.code()}): $errorBody"
                 if (throwable.code() >= 500 || throwable.code() == 429) {
-                    RetryableUploadException("$prefix (${throwable.code()})", throwable)
+                    RetryableUploadException(enrichedMessage, throwable)
                 } else {
-                    PermanentUploadException("$prefix (${throwable.code()})", throwable)
+                    PermanentUploadException(enrichedMessage, throwable)
                 }
             }
             is IOException -> RetryableUploadException(prefix, throwable)
