@@ -176,6 +176,8 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                 Button(onClick = { vm.retryFailedNow() }) {
                     Text("Retry Failed")
                 }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.stopSync() }) {
                     Text("Stop Sync")
                 }
@@ -200,6 +202,15 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                 modifier = Modifier.heightIn(max = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (status.uploadedItems.isEmpty() && status.uploadedCount > 0) {
+                    item {
+                        Text(
+                            "No recent uploaded records yet in this app version. " +
+                                "Only uploads after this update are listed.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
                 items(status.uploadedItems) { uploaded ->
                     Text("UPLOADED ${uploaded.key}: ${uploaded.uri}")
                 }
