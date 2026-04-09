@@ -92,6 +92,10 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
+    suspend fun resetScanWatermark() {
+        setLastScanEpochMs(0L)
+    }
+
     suspend fun getLastScanEpochMs(): Long {
         return statusFlow.map { it.lastScanEpochMs }.first()
     }

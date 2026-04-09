@@ -109,6 +109,13 @@ class SyncStatusViewModel(
         WorkScheduler.enqueueScanNow(appContext)
     }
 
+    fun retryFailedNow() {
+        viewModelScope.launch {
+            services.syncStatusRepository.resetScanWatermark()
+            WorkScheduler.enqueueScanNow(appContext)
+        }
+    }
+
     suspend fun setToken(token: String) {
         services.tokenStore.setToken(token)
     }
@@ -150,6 +157,9 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.syncNow() }) {
                     Text("Sync Now")
+                }
+                Button(onClick = { vm.retryFailedNow() }) {
+                    Text("Retry Failed")
                 }
             }
 
