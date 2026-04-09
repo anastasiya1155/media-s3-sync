@@ -154,10 +154,83 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
     val runningUploads by vm.runningUploads.collectAsStateWithLifecycle()
     var tokenText by remember { mutableStateOf("") }
+    var isLoggedIn by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         tokenText = vm.getSavedToken()
+        isLoggedIn = tokenText.isNotBlank()
     }
 
+    if (!isLoggedIn) {
+        LoginScreen(
+            tokenText = tokenText,
+            onTokenChange = { tokenText = it },
+            onLogin = {
+                val value = tokenText.trim()
+                if (value.isNotBlank()) {
+                    vm.setToken(value)
+                    isLoggedIn = true
+                }
+            },
+        )
+    } else {
+        SyncDashboardScreen(
+            status = status,
+            runningUploads = runningUploads,
+            onSyncNow = { vm.syncNow() },
+            onRetryFailed = { vm.retryFailedNow() },
+            onStopSync = { vm.stopSync() },
+            onResumeSync = { vm.resumeSync() },
+            onClearQueue = { vm.clearQueue() },
+            onLogout = {
+                vm.setToken("")
+                tokenText = ""
+                isLoggedIn = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    tokenText: String,
+    onTokenChange: (String) -> Unit,
+    onLogin: () -> Unit,
+) {
+    Scaffold { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
+            Text("Log in with your backend token to start syncing media.")
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = tokenText,
+                onValueChange = onTokenChange,
+                label = { Text("Auth token") },
+                singleLine = true,
+            )
+            Button(onClick = onLogin) {
+                Text("Log in")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncDashboardScreen(
+    status: SyncStatus,
+    runningUploads: Int,
+    onSyncNow: () -> Unit,
+    onRetryFailed: () -> Unit,
+    onStopSync: () -> Unit,
+    onResumeSync: () -> Unit,
+    onClearQueue: () -> Unit,
+    onLogout: () -> Unit,
+) {
     Scaffold { padding ->
         Column(
             modifier = Modifier
@@ -174,34 +247,26 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             Text("Running/Queued Jobs: $runningUploads")
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.syncNow() }) {
+                Button(onClick = onSyncNow) {
                     Text("Sync Now")
                 }
-                Button(onClick = { vm.retryFailedNow() }) {
+                Button(onClick = onRetryFailed) {
                     Text("Retry Failed")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.stopSync() }) {
+                Button(onClick = onStopSync) {
                     Text("Stop Sync")
                 }
-                Button(onClick = { vm.resumeSync() }) {
+                Button(onClick = onResumeSync) {
                     Text("Resume Sync")
                 }
-                Button(onClick = { vm.clearQueue() }) {
+                Button(onClick = onClearQueue) {
                     Text("Clear Queue")
                 }
-            }
-
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = tokenText,
-                onValueChange = { tokenText = it },
-                label = { Text("Auth token") },
-                singleLine = true,
-            )
-            Button(onClick = { vm.setToken(tokenText.trim()) }) {
-                Text("Save token")
+                Button(onClick = onLogout) {
+                    Text("Log out")
+                }
             }
 
             Text("Recent uploaded items", style = MaterialTheme.typography.titleMedium)
