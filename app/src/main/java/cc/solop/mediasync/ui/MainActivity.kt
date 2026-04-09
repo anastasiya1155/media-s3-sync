@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -199,12 +200,14 @@ class SyncStatusViewModel(
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
+        loadLocalMedia()
     }
 
     fun retryFailedNow() {
         viewModelScope.launch {
             services.syncStatusRepository.resetScanWatermark()
             WorkScheduler.enqueueScanNow(appContext)
+            loadLocalMedia()
         }
     }
 
@@ -221,6 +224,7 @@ class SyncStatusViewModel(
 
     fun resumeSync() {
         WorkScheduler.resumeSync(appContext)
+        loadLocalMedia()
     }
 
     fun getSavedToken(): String {
@@ -333,10 +337,27 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     var isLoggingIn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val isLoggedIn = authToken.isNotBlank()
+    var hadActiveWork by remember { mutableStateOf(false) }
 
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
             vm.validateTokenOnLoad()
+            vm.loadLocalMedia()
+        }
+    }
+
+    val hasActiveWork = scanWorkSummary.running > 0 ||
+        scanWorkSummary.enqueued > 0 ||
+        uploadWorkSummary.running > 0 ||
+        uploadWorkSummary.enqueued > 0
+
+    LaunchedEffect(hasActiveWork) {
+        if (hasActiveWork) {
+            hadActiveWork = true
+        } else if (hadActiveWork && authToken.isNotBlank()) {
+            hadActiveWork = false
+            // Let status datastore settle after worker completion, then refresh gallery badges.
+            delay(350)
             vm.loadLocalMedia()
         }
     }
