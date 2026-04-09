@@ -26,8 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
@@ -197,6 +199,8 @@ class SyncStatusViewModel(
 
     private val _isLoadingLocalMedia = MutableStateFlow(false)
     val isLoadingLocalMedia: StateFlow<Boolean> = _isLoadingLocalMedia
+    private val _isSyncPaused = MutableStateFlow(false)
+    val isSyncPaused: StateFlow<Boolean> = _isSyncPaused
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -213,6 +217,7 @@ class SyncStatusViewModel(
 
     fun stopSync() {
         WorkScheduler.stopAllSync(appContext)
+        _isSyncPaused.value = true
     }
 
     fun clearQueue() {
@@ -224,7 +229,26 @@ class SyncStatusViewModel(
 
     fun resumeSync() {
         WorkScheduler.resumeSync(appContext)
+        _isSyncPaused.value = false
         loadLocalMedia()
+    }
+
+    fun toggleSyncPause() {
+        if (_isSyncPaused.value) {
+            resumeSync()
+        } else {
+            stopSync()
+        }
+    }
+
+    fun startFreshSync() {
+        viewModelScope.launch {
+            WorkScheduler.stopAllSync(appContext)
+            services.syncStatusRepository.resetAllStateForFreshStart()
+            WorkScheduler.resumeSync(appContext)
+            _isSyncPaused.value = false
+            loadLocalMedia()
+        }
     }
 
     fun getSavedToken(): String {
@@ -331,6 +355,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val authToken by vm.authToken.collectAsStateWithLifecycle()
     val localMedia by vm.localMedia.collectAsStateWithLifecycle()
     val isLoadingLocalMedia by vm.isLoadingLocalMedia.collectAsStateWithLifecycle()
+    val isSyncPaused by vm.isSyncPaused.collectAsStateWithLifecycle()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
@@ -391,11 +416,9 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             scanWorkSummary = scanWorkSummary,
             localMedia = localMedia,
             isLoadingLocalMedia = isLoadingLocalMedia,
-            onSyncNow = { vm.syncNow() },
-            onRetryFailed = { vm.retryFailedNow() },
-            onStopSync = { vm.stopSync() },
-            onResumeSync = { vm.resumeSync() },
-            onClearQueue = { vm.clearQueue() },
+            isSyncPaused = isSyncPaused,
+            onStartFreshSync = { vm.startFreshSync() },
+            onToggleSyncPause = { vm.toggleSyncPause() },
             onRefreshMediaStatus = { vm.loadLocalMedia() },
             onLogout = {
                 vm.setToken("")
@@ -582,11 +605,9 @@ private fun SyncDashboardScreen(
     scanWorkSummary: SyncStatusViewModel.WorkSummary,
     localMedia: List<SyncStatusViewModel.LocalMediaStatus>,
     isLoadingLocalMedia: Boolean,
-    onSyncNow: () -> Unit,
-    onRetryFailed: () -> Unit,
-    onStopSync: () -> Unit,
-    onResumeSync: () -> Unit,
-    onClearQueue: () -> Unit,
+    isSyncPaused: Boolean,
+    onStartFreshSync: () -> Unit,
+    onToggleSyncPause: () -> Unit,
     onRefreshMediaStatus: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -638,26 +659,18 @@ private fun SyncDashboardScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onSyncNow, modifier = Modifier.weight(1f)) {
-                    Text("Sync Now")
+                FilledTonalButton(onClick = onStartFreshSync, modifier = Modifier.weight(1f)) {
+                    Text("Clear Statuses & Start Fresh")
                 }
-                FilledTonalButton(onClick = onRetryFailed, modifier = Modifier.weight(1f)) {
-                    Text("Retry Failed")
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onStopSync, modifier = Modifier.weight(1f)) {
-                    Text("Stop Sync")
-                }
-                OutlinedButton(onClick = onResumeSync, modifier = Modifier.weight(1f)) {
-                    Text("Resume Sync")
+                OutlinedButton(onClick = onToggleSyncPause) {
+                    Icon(
+                        imageVector = if (isSyncPaused) Icons.Filled.PlayCircle else Icons.Filled.PauseCircle,
+                        contentDescription = if (isSyncPaused) "Resume sync" else "Pause sync",
+                    )
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onClearQueue, modifier = Modifier.weight(1f)) {
-                    Text("Clear Queue")
-                }
-                OutlinedButton(onClick = onLogout, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
                     Text("Log out")
                 }
             }
@@ -673,7 +686,9 @@ private fun SyncDashboardScreen(
                 ) {
                     Text("Library sync status (Gallery)", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onRefreshMediaStatus) { Text("Refresh") }
+                        IconButton(onClick = onRefreshMediaStatus) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh gallery")
+                        }
                     }
                     if (isLoadingLocalMedia) {
                         Text("Loading local media...", style = MaterialTheme.typography.bodySmall)

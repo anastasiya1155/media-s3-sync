@@ -184,6 +184,21 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
+    suspend fun resetAllStateForFreshStart() {
+        context.appDataStore.edit { prefs ->
+            prefs[keyQueued] = 0L
+            prefs[keyUploaded] = 0L
+            prefs[keyDuplicate] = 0L
+            prefs[keyFailed] = 0L
+            prefs.remove(keyUploadedItems)
+            prefs.remove(keyFailedItems)
+            prefs.remove(keySyncedUris)
+            prefs[keyLastScanEpochMs] = 0L
+            prefs[keyLastScanDateAddedSec] = 0L
+            prefs[keyLastScanMediaId] = 0L
+        }
+    }
+
     suspend fun getLastScanEpochMs(): Long {
         return statusFlow.map { it.lastScanEpochMs }.first()
     }
