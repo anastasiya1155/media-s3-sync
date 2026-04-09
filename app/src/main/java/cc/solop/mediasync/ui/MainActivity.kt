@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,14 +39,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import cc.solop.mediasync.data.api.LoginRequest
 import cc.solop.mediasync.data.repo.SyncStatus
 import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.workers.WorkScheduler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class MainActivity : ComponentActivity() {
 
@@ -137,6 +141,34 @@ class SyncStatusViewModel(
         services.tokenStore.setToken(token)
     }
 
+    suspend fun login(email: String, password: String): String? {
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isBlank() || password.isBlank()) {
+            return "Email and password are required."
+        }
+        return try {
+            val response = services.authApi.login(
+                LoginRequest(
+                    email = normalizedEmail,
+                    password = password,
+                )
+            )
+            val token = response.accessToken?.trim().orEmpty()
+            if (token.isBlank()) {
+                "Login succeeded but no access token was returned."
+            } else {
+                services.tokenStore.setToken(token)
+                null
+            }
+        } catch (e: HttpException) {
+            val body = withContextSafeIo { e.response()?.errorBody()?.string() }.orEmpty()
+            val details = body.take(200).ifBlank { e.message() ?: "HTTP ${e.code()}" }
+            "Login failed (${e.code()}): $details"
+        } catch (e: Exception) {
+            "Login failed: ${e.message ?: "Unknown error"}"
+        }
+    }
+
     companion object {
         fun factory(appContext: Context, workManager: WorkManager, services: ServiceLocator): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
@@ -153,22 +185,36 @@ class SyncStatusViewModel(
 private fun MainScreen(vm: SyncStatusViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
     val runningUploads by vm.runningUploads.collectAsStateWithLifecycle()
-    var tokenText by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var loginError by remember { mutableStateOf<String?>(null) }
+    var isLoggingIn by remember { mutableStateOf(false) }
     var isLoggedIn by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        tokenText = vm.getSavedToken()
-        isLoggedIn = tokenText.isNotBlank()
+        isLoggedIn = vm.getSavedToken().isNotBlank()
     }
 
     if (!isLoggedIn) {
         LoginScreen(
-            tokenText = tokenText,
-            onTokenChange = { tokenText = it },
+            email = email,
+            password = password,
+            error = loginError,
+            isLoggingIn = isLoggingIn,
+            onEmailChange = { email = it },
+            onPasswordChange = { password = it },
             onLogin = {
-                val value = tokenText.trim()
-                if (value.isNotBlank()) {
-                    vm.setToken(value)
-                    isLoggedIn = true
+                scope.launch {
+                    isLoggingIn = true
+                    loginError = null
+                    val error = vm.login(email = email, password = password)
+                    isLoggingIn = false
+                    if (error == null) {
+                        password = ""
+                        isLoggedIn = true
+                    } else {
+                        loginError = error
+                    }
                 }
             },
         )
@@ -183,7 +229,6 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             onClearQueue = { vm.clearQueue() },
             onLogout = {
                 vm.setToken("")
-                tokenText = ""
                 isLoggedIn = false
             },
         )
@@ -192,8 +237,12 @@ private fun MainScreen(vm: SyncStatusViewModel) {
 
 @Composable
 private fun LoginScreen(
-    tokenText: String,
-    onTokenChange: (String) -> Unit,
+    email: String,
+    password: String,
+    error: String?,
+    isLoggingIn: Boolean,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
     onLogin: () -> Unit,
 ) {
     Scaffold { padding ->
@@ -206,19 +255,33 @@ private fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
-            Text("Log in with your backend token to start syncing media.")
+            Text("Sign in with the same account you use in Diary.")
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = tokenText,
-                onValueChange = onTokenChange,
-                label = { Text("Auth token") },
+                value = email,
+                onValueChange = onEmailChange,
+                label = { Text("Email") },
                 singleLine = true,
             )
-            Button(onClick = onLogin) {
-                Text("Log in")
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = password,
+                onValueChange = onPasswordChange,
+                label = { Text("Password") },
+                singleLine = true,
+            )
+            if (!error.isNullOrBlank()) {
+                Text(error)
+            }
+            Button(onClick = onLogin, enabled = !isLoggingIn) {
+                Text(if (isLoggingIn) "Logging in..." else "Log in")
             }
         }
     }
+}
+
+private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
+    return kotlinx.coroutines.withContext(Dispatchers.IO) { block() }
 }
 
 @Composable

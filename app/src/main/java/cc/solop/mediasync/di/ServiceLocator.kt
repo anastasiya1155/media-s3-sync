@@ -2,6 +2,7 @@ package cc.solop.mediasync.di
 
 import android.content.Context
 import cc.solop.mediasync.BuildConfig
+import cc.solop.mediasync.data.api.AuthApi
 import cc.solop.mediasync.data.api.MediaApi
 import cc.solop.mediasync.data.auth.TokenStore
 import cc.solop.mediasync.data.media.MediaStoreScanner
@@ -60,6 +61,18 @@ class ServiceLocator private constructor(private val appContext: Context) {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(MediaApi::class.java)
+    }
+
+    val authApi: AuthApi by lazy {
+        val moshi = Moshi.Builder()
+            .add(KotlinJsonAdapterFactory())
+            .build()
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(AuthApi::class.java)
     }
 
     val mediaStoreScanner: MediaStoreScanner by lazy { MediaStoreScanner(appContext) }
