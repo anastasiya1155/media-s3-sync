@@ -31,8 +31,22 @@ class ServiceLocator private constructor(private val appContext: Context) {
         chain.proceed(request)
     }
 
+    private val unauthorizedInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val hasAuthHeader = request.header("authorization").isNullOrBlank().not()
+        val isLoginRequest = request.url.encodedPath.endsWith("/api/authentication")
+        if (response.code == 401 && hasAuthHeader && !isLoginRequest) {
+            tokenStore.clearToken()
+        }
+        response
+    }
+
     val okHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder().addInterceptor(authInterceptor).build()
+        OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(unauthorizedInterceptor)
+            .build()
     }
 
     val uploadHttpClient: OkHttpClient by lazy {

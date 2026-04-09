@@ -113,6 +113,7 @@ class SyncStatusViewModel(
     private val workManager: WorkManager,
     private val services: ServiceLocator,
 ) : ViewModel() {
+    val authToken: StateFlow<String> = services.tokenStore.tokenFlow
 
     val status: StateFlow<SyncStatus> = services.syncStatusRepository.statusFlow.stateIn(
         scope = viewModelScope,
@@ -160,6 +161,25 @@ class SyncStatusViewModel(
         services.tokenStore.setToken(token)
     }
 
+    fun validateTokenOnLoad() {
+        viewModelScope.launch {
+            val token = services.tokenStore.getCachedToken().trim()
+            if (token.isBlank()) return@launch
+            try {
+                val response = services.authApi.me()
+                if (response.code() == 401) {
+                    services.tokenStore.clearToken()
+                }
+            } catch (e: HttpException) {
+                if (e.code() == 401) {
+                    services.tokenStore.clearToken()
+                }
+            } catch (_: Exception) {
+                // Keep existing session on transient network/API errors.
+            }
+        }
+    }
+
     suspend fun login(email: String, password: String): String? {
         val normalizedEmail = email.trim()
         if (normalizedEmail.isBlank() || password.isBlank()) {
@@ -204,14 +224,18 @@ class SyncStatusViewModel(
 private fun MainScreen(vm: SyncStatusViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
     val runningUploads by vm.runningUploads.collectAsStateWithLifecycle()
+    val authToken by vm.authToken.collectAsStateWithLifecycle()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var isLoggingIn by remember { mutableStateOf(false) }
-    var isLoggedIn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        isLoggedIn = vm.getSavedToken().isNotBlank()
+    val isLoggedIn = authToken.isNotBlank()
+
+    LaunchedEffect(authToken) {
+        if (authToken.isNotBlank()) {
+            vm.validateTokenOnLoad()
+        }
     }
 
     if (!isLoggedIn) {
@@ -230,7 +254,6 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                     isLoggingIn = false
                     if (error == null) {
                         password = ""
-                        isLoggedIn = true
                     } else {
                         loginError = error
                     }
@@ -248,7 +271,6 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             onClearQueue = { vm.clearQueue() },
             onLogout = {
                 vm.setToken("")
-                isLoggedIn = false
             },
         )
     }
