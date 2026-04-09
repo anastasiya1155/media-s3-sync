@@ -121,6 +121,13 @@ class SyncStatusViewModel(
         WorkScheduler.stopAllSync(appContext)
     }
 
+    fun clearQueue() {
+        viewModelScope.launch {
+            WorkScheduler.clearQueue(appContext)
+            services.syncStatusRepository.skipBacklogFromNow()
+        }
+    }
+
     fun resumeSync() {
         WorkScheduler.resumeSync(appContext)
     }
@@ -183,6 +190,9 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                 }
                 Button(onClick = { vm.resumeSync() }) {
                     Text("Resume Sync")
+                }
+                Button(onClick = { vm.clearQueue() }) {
+                    Text("Clear Queue")
                 }
             }
 

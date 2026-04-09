@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cc.solop.mediasync.data.store.appDataStore
+import java.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -142,6 +143,17 @@ class SyncStatusRepository(private val context: Context) {
             prefs[keyLastScanEpochMs] = 0L
             prefs[keyLastScanDateAddedSec] = 0L
             prefs[keyLastScanMediaId] = 0L
+        }
+    }
+
+    suspend fun skipBacklogFromNow() {
+        val nowSec = Instant.now().epochSecond
+        context.appDataStore.edit { prefs ->
+            prefs[keyLastScanEpochMs] = nowSec * 1000L
+            prefs[keyLastScanDateAddedSec] = nowSec
+            // Ensure we don't include any already-existing item in the same second.
+            prefs[keyLastScanMediaId] = Long.MAX_VALUE
+            prefs[keyQueued] = 0L
         }
     }
 

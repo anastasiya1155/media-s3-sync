@@ -65,6 +65,13 @@ object WorkScheduler {
         workManager.cancelAllWorkByTag(TAG_UPLOAD)
     }
 
+    fun clearQueue(context: Context) {
+        val workManager = WorkManager.getInstance(context)
+        // Keep periodic schedule untouched; only purge currently queued/running work.
+        workManager.cancelAllWorkByTag(TAG_SCAN)
+        workManager.cancelAllWorkByTag(TAG_UPLOAD)
+    }
+
     fun resumeSync(context: Context) {
         schedulePeriodicScan(context)
         enqueueScanNow(context)
