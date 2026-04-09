@@ -28,6 +28,11 @@ data class SyncStatus(
     val lastScanEpochMs: Long = 0,
 )
 
+data class ScanCursor(
+    val dateAddedSec: Long,
+    val mediaIdExclusive: Long,
+)
+
 class SyncStatusRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -37,6 +42,8 @@ class SyncStatusRepository(private val context: Context) {
     private val keyFailed = longPreferencesKey("failed_count")
     private val keyFailedItems = stringPreferencesKey("failed_items_json")
     private val keyLastScanEpochMs = longPreferencesKey("last_scan_epoch_ms")
+    private val keyLastScanDateAddedSec = longPreferencesKey("last_scan_date_added_sec")
+    private val keyLastScanMediaId = longPreferencesKey("last_scan_media_id")
 
     val statusFlow: Flow<SyncStatus> = context.appDataStore.data.map { prefs ->
         val failedItems = prefs[keyFailedItems]
@@ -92,8 +99,28 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
+    suspend fun getScanCursor(): ScanCursor {
+        val prefs = context.appDataStore.data.first()
+        return ScanCursor(
+            dateAddedSec = prefs[keyLastScanDateAddedSec] ?: 0L,
+            mediaIdExclusive = prefs[keyLastScanMediaId] ?: 0L,
+        )
+    }
+
+    suspend fun setScanCursor(dateAddedSec: Long, mediaIdExclusive: Long) {
+        context.appDataStore.edit { prefs ->
+            prefs[keyLastScanDateAddedSec] = dateAddedSec
+            prefs[keyLastScanMediaId] = mediaIdExclusive
+            prefs[keyLastScanEpochMs] = dateAddedSec * 1000L
+        }
+    }
+
     suspend fun resetScanWatermark() {
-        setLastScanEpochMs(0L)
+        context.appDataStore.edit { prefs ->
+            prefs[keyLastScanEpochMs] = 0L
+            prefs[keyLastScanDateAddedSec] = 0L
+            prefs[keyLastScanMediaId] = 0L
+        }
     }
 
     suspend fun getLastScanEpochMs(): Long {
