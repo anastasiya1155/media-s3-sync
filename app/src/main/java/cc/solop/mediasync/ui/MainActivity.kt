@@ -23,7 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
@@ -72,6 +72,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -627,12 +628,16 @@ private fun SyncDashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
-                    Text("Photos", style = MaterialTheme.typography.headlineLarge)
-                    Text("Backup", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Photos", style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "Backup",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Surface(
-                    modifier = Modifier.size(46.dp),
-                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.size(44.dp),
+                    shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
@@ -649,30 +654,41 @@ private fun SyncDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        "Pending ${status.queuedCount}  •  Uploaded ${status.uploadedCount}  •  Duplicates ${status.duplicateCount}  •  Failed ${status.failedCount}",
+                        "Pending ${status.queuedCount} • Uploaded ${status.uploadedCount} • Duplicates ${status.duplicateCount} • Failed ${status.failedCount}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Scan r:${scanWorkSummary.running} q:${scanWorkSummary.enqueued} b:${scanWorkSummary.blocked}  •  Upload r:${uploadWorkSummary.running} q:${uploadWorkSummary.enqueued} b:${uploadWorkSummary.blocked}",
+                        "Scan r:${scanWorkSummary.running} q:${scanWorkSummary.enqueued} b:${scanWorkSummary.blocked} • Upload r:${uploadWorkSummary.running} q:${uploadWorkSummary.enqueued} b:${uploadWorkSummary.blocked}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilledTonalButton(onClick = onStartFreshSync, modifier = Modifier.weight(1f)) {
                     Text("Reset")
                 }
-                OutlinedButton(onClick = onToggleSyncPause) {
+                OutlinedButton(
+                    onClick = onToggleSyncPause,
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                ) {
                     Icon(
                         imageVector = if (isSyncPaused) Icons.Filled.PlayCircle else Icons.Filled.PauseCircle,
                         contentDescription = if (isSyncPaused) "Resume sync" else "Pause sync",
                     )
                 }
-                OutlinedButton(onClick = onLogout, modifier = Modifier.size(40.dp)) {
+                OutlinedButton(
+                    onClick = onLogout,
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        imageVector = Icons.AutoMirrored.Filled.Logout,
                         contentDescription = "Log out",
                     )
                 }
@@ -684,11 +700,13 @@ private fun SyncDashboardScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                        .padding(vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text("Sync Status", style = MaterialTheme.typography.titleMedium)
@@ -817,7 +835,7 @@ private fun LocalMediaPreviewCard(
         Surface(
             modifier = Modifier
                 .align(androidx.compose.ui.Alignment.TopEnd)
-                .padding(4.dp),
+                .padding(3.dp),
             shape = MaterialTheme.shapes.small,
             color = if (item.isSynced) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -829,11 +847,11 @@ private fun LocalMediaPreviewCard(
                 imageVector = if (item.isSynced) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
                 contentDescription = if (item.isSynced) "Synced" else "Pending",
                 modifier = Modifier
-                    .padding(3.dp)
-                    .size(12.dp),
+                    .padding(2.dp)
+                    .size(11.dp),
             )
         }
-            }
+    }
 }
 
 @Composable
