@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -51,6 +52,7 @@ class SyncStatusRepository(private val context: Context) {
     private val keyFailed = longPreferencesKey("failed_count")
     private val keyUploadedItems = stringPreferencesKey("uploaded_items_json")
     private val keyFailedItems = stringPreferencesKey("failed_items_json")
+    private val keySyncedUris = stringPreferencesKey("synced_uris_json")
     private val keyLastScanEpochMs = longPreferencesKey("last_scan_epoch_ms")
     private val keyLastScanDateAddedSec = longPreferencesKey("last_scan_date_added_sec")
     private val keyLastScanMediaId = longPreferencesKey("last_scan_media_id")
@@ -84,6 +86,13 @@ class SyncStatusRepository(private val context: Context) {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyUploaded] = (prefs[keyUploaded] ?: 0) + 1
+            val synced = prefs[keySyncedUris]
+                ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
+                ?: emptyList()
+            prefs[keySyncedUris] = json.encodeToString(
+                ListSerializer(String.serializer()),
+                (listOf(uri) + synced).distinct().take(MAX_SYNCED_URIS),
+            )
             val existing = prefs[keyUploadedItems]
                 ?.let { runCatching { json.decodeFromString<List<UploadedItem>>(it) }.getOrNull() }
                 ?: emptyList()
@@ -96,10 +105,19 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
-    suspend fun incrementDuplicate() {
+    suspend fun incrementDuplicate(uri: String? = null) {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyDuplicate] = (prefs[keyDuplicate] ?: 0) + 1
+            if (!uri.isNullOrBlank()) {
+                val synced = prefs[keySyncedUris]
+                    ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
+                    ?: emptyList()
+                prefs[keySyncedUris] = json.encodeToString(
+                    ListSerializer(String.serializer()),
+                    (listOf(uri) + synced).distinct().take(MAX_SYNCED_URIS),
+                )
+            }
         }
     }
 
@@ -170,8 +188,17 @@ class SyncStatusRepository(private val context: Context) {
         return statusFlow.map { it.lastScanEpochMs }.first()
     }
 
+    suspend fun getSyncedUrisSet(): Set<String> {
+        val prefs = context.appDataStore.data.first()
+        val synced = prefs[keySyncedUris]
+            ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
+            ?: emptyList()
+        return synced.toSet()
+    }
+
     private companion object {
         const val MAX_FAILED_ITEMS = 200
         const val MAX_UPLOADED_ITEMS = 200
+        const val MAX_SYNCED_URIS = 10_000
     }
 }

@@ -76,6 +76,7 @@ import cc.solop.mediasync.data.repo.SyncStatus
 import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.workers.WorkScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -132,6 +133,13 @@ class SyncStatusViewModel(
         val blocked: Int = 0,
     )
 
+    data class LocalMediaStatus(
+        val uri: String,
+        val filename: String,
+        val bucketName: String,
+        val isSynced: Boolean,
+    )
+
     val authToken: StateFlow<String> = services.tokenStore.tokenFlow
 
     val status: StateFlow<SyncStatus> = services.syncStatusRepository.statusFlow.stateIn(
@@ -169,6 +177,15 @@ class SyncStatusViewModel(
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = WorkSummary(),
             )
+
+    private val _localMedia = MutableStateFlow<List<LocalMediaStatus>>(emptyList())
+    val localMedia: StateFlow<List<LocalMediaStatus>> = _localMedia
+
+    private val _isLoadingLocalMedia = MutableStateFlow(false)
+    val isLoadingLocalMedia: StateFlow<Boolean> = _isLoadingLocalMedia
+
+    private val _cameraOnlyFilter = MutableStateFlow(true)
+    val cameraOnlyFilter: StateFlow<Boolean> = _cameraOnlyFilter
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -223,6 +240,30 @@ class SyncStatusViewModel(
         }
     }
 
+    fun loadLocalMedia(cameraOnly: Boolean = _cameraOnlyFilter.value) {
+        viewModelScope.launch {
+            _cameraOnlyFilter.value = cameraOnly
+            _isLoadingLocalMedia.value = true
+            try {
+                val local = services.mediaStoreScanner.listRecentMedia(
+                    limit = 300,
+                    cameraOnly = cameraOnly,
+                )
+                val syncedUris = services.syncStatusRepository.getSyncedUrisSet()
+                _localMedia.value = local.map { item ->
+                    LocalMediaStatus(
+                        uri = item.uri,
+                        filename = item.filename,
+                        bucketName = item.bucketName,
+                        isSynced = syncedUris.contains(item.uri),
+                    )
+                }
+            } finally {
+                _isLoadingLocalMedia.value = false
+            }
+        }
+    }
+
     suspend fun login(email: String, password: String): String? {
         val normalizedEmail = email.trim()
         if (normalizedEmail.isBlank() || password.isBlank()) {
@@ -269,6 +310,9 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val uploadWorkSummary by vm.uploadWorkSummary.collectAsStateWithLifecycle()
     val scanWorkSummary by vm.scanWorkSummary.collectAsStateWithLifecycle()
     val authToken by vm.authToken.collectAsStateWithLifecycle()
+    val localMedia by vm.localMedia.collectAsStateWithLifecycle()
+    val isLoadingLocalMedia by vm.isLoadingLocalMedia.collectAsStateWithLifecycle()
+    val cameraOnlyFilter by vm.cameraOnlyFilter.collectAsStateWithLifecycle()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
@@ -279,6 +323,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
             vm.validateTokenOnLoad()
+            vm.loadLocalMedia(cameraOnly = cameraOnlyFilter)
         }
     }
 
@@ -309,11 +354,17 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             status = status,
             uploadWorkSummary = uploadWorkSummary,
             scanWorkSummary = scanWorkSummary,
+            localMedia = localMedia,
+            isLoadingLocalMedia = isLoadingLocalMedia,
+            cameraOnlyFilter = cameraOnlyFilter,
             onSyncNow = { vm.syncNow() },
             onRetryFailed = { vm.retryFailedNow() },
             onStopSync = { vm.stopSync() },
             onResumeSync = { vm.resumeSync() },
             onClearQueue = { vm.clearQueue() },
+            onShowCamera = { vm.loadLocalMedia(cameraOnly = true) },
+            onShowAllGallery = { vm.loadLocalMedia(cameraOnly = false) },
+            onRefreshMediaStatus = { vm.loadLocalMedia() },
             onLogout = {
                 vm.setToken("")
             },
@@ -497,11 +548,17 @@ private fun SyncDashboardScreen(
     status: SyncStatus,
     uploadWorkSummary: SyncStatusViewModel.WorkSummary,
     scanWorkSummary: SyncStatusViewModel.WorkSummary,
+    localMedia: List<SyncStatusViewModel.LocalMediaStatus>,
+    isLoadingLocalMedia: Boolean,
+    cameraOnlyFilter: Boolean,
     onSyncNow: () -> Unit,
     onRetryFailed: () -> Unit,
     onStopSync: () -> Unit,
     onResumeSync: () -> Unit,
     onClearQueue: () -> Unit,
+    onShowCamera: () -> Unit,
+    onShowAllGallery: () -> Unit,
+    onRefreshMediaStatus: () -> Unit,
     onLogout: () -> Unit,
 ) {
     Scaffold { padding ->
@@ -571,6 +628,50 @@ private fun SyncDashboardScreen(
                     Text("Workers", style = MaterialTheme.typography.titleMedium)
                     Text("Scan • running ${scanWorkSummary.running} • queued ${scanWorkSummary.enqueued} • blocked ${scanWorkSummary.blocked}")
                     Text("Upload • running ${uploadWorkSummary.running} • queued ${uploadWorkSummary.enqueued} • blocked ${uploadWorkSummary.blocked}")
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Library sync status", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(
+                            onClick = onShowCamera,
+                            enabled = !cameraOnlyFilter,
+                        ) { Text("Camera") }
+                        FilledTonalButton(
+                            onClick = onShowAllGallery,
+                            enabled = cameraOnlyFilter,
+                        ) { Text("Gallery") }
+                        OutlinedButton(onClick = onRefreshMediaStatus) { Text("Refresh") }
+                    }
+                    if (isLoadingLocalMedia) {
+                        Text("Loading local media...", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Column(
+                        modifier = Modifier.heightIn(max = 220.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        localMedia.forEach { item ->
+                            ActivityRow(
+                                title = item.filename,
+                                subtitle = "${item.bucketName} • ${if (item.isSynced) "Synced" else "Not synced"}",
+                                icon = {
+                                    Icon(
+                                        imageVector = if (item.isSynced) Icons.Filled.CloudUpload else Icons.Filled.Schedule,
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
             }
 

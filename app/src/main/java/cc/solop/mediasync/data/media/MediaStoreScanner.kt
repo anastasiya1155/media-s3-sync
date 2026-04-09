@@ -10,6 +10,13 @@ import java.time.format.DateTimeFormatter
 
 class MediaStoreScanner(private val context: Context) {
 
+    data class LocalMediaItem(
+        val uri: String,
+        val filename: String,
+        val bucketName: String,
+        val dateAddedSec: Long,
+    )
+
     fun scanNewMedia(
         sinceDateAddedSec: Long,
         sinceMediaIdExclusive: Long,
@@ -80,6 +87,63 @@ class MediaStoreScanner(private val context: Context) {
             }
         }
 
+        return results
+    }
+
+    fun listRecentMedia(
+        limit: Int = 300,
+        cameraOnly: Boolean = false,
+    ): List<LocalMediaItem> {
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATE_ADDED,
+            MediaStore.Files.FileColumns.MEDIA_TYPE,
+        )
+
+        val mediaTypeFilter = "(${MediaStore.Files.FileColumns.MEDIA_TYPE}=? OR ${MediaStore.Files.FileColumns.MEDIA_TYPE}=?)"
+        val selection = if (cameraOnly) {
+            "$mediaTypeFilter AND LOWER(${MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME}) LIKE ?"
+        } else {
+            mediaTypeFilter
+        }
+        val selectionArgs = if (cameraOnly) {
+            arrayOf(
+                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
+                "%camera%",
+            )
+        } else {
+            arrayOf(
+                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
+            )
+        }
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC, ${MediaStore.Files.FileColumns._ID} DESC"
+
+        val results = mutableListOf<LocalMediaItem>()
+        context.contentResolver.query(collection, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
+            val idIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+            val nameIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+            val bucketIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME)
+            val addedIx = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+
+            while (cursor.moveToNext() && results.size < limit) {
+                val id = cursor.getLong(idIx)
+                val uri = ContentUris.withAppendedId(collection, id).toString()
+                val filename = cursor.getString(nameIx) ?: "media_$id"
+                val bucket = cursor.getString(bucketIx) ?: "Unknown"
+                val addedSec = cursor.getLong(addedIx)
+                results += LocalMediaItem(
+                    uri = uri,
+                    filename = filename,
+                    bucketName = bucket,
+                    dateAddedSec = addedSec,
+                )
+            }
+        }
         return results
     }
 
