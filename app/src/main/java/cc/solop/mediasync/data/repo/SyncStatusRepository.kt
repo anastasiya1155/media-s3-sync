@@ -82,6 +82,7 @@ class SyncStatusRepository(private val context: Context) {
 
     suspend fun incrementUploaded(uri: String, key: String) {
         context.appDataStore.edit { prefs ->
+            prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyUploaded] = (prefs[keyUploaded] ?: 0) + 1
             val existing = prefs[keyUploadedItems]
                 ?.let { runCatching { json.decodeFromString<List<UploadedItem>>(it) }.getOrNull() }
@@ -97,12 +98,14 @@ class SyncStatusRepository(private val context: Context) {
 
     suspend fun incrementDuplicate() {
         context.appDataStore.edit { prefs ->
+            prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyDuplicate] = (prefs[keyDuplicate] ?: 0) + 1
         }
     }
 
     suspend fun incrementFailed(uri: String, reason: String) {
         context.appDataStore.edit { prefs ->
+            prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyFailed] = (prefs[keyFailed] ?: 0) + 1
             val existing = prefs[keyFailedItems]
                 ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
@@ -153,6 +156,12 @@ class SyncStatusRepository(private val context: Context) {
             prefs[keyLastScanDateAddedSec] = nowSec
             // Ensure we don't include any already-existing item in the same second.
             prefs[keyLastScanMediaId] = Long.MAX_VALUE
+            prefs[keyQueued] = 0L
+        }
+    }
+
+    suspend fun clearQueuedCount() {
+        context.appDataStore.edit { prefs ->
             prefs[keyQueued] = 0L
         }
     }

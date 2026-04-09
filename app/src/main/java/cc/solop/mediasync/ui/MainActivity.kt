@@ -113,6 +113,12 @@ class SyncStatusViewModel(
     private val workManager: WorkManager,
     private val services: ServiceLocator,
 ) : ViewModel() {
+    data class WorkSummary(
+        val running: Int = 0,
+        val enqueued: Int = 0,
+        val blocked: Int = 0,
+    )
+
     val authToken: StateFlow<String> = services.tokenStore.tokenFlow
 
     val status: StateFlow<SyncStatus> = services.syncStatusRepository.statusFlow.stateIn(
@@ -121,13 +127,34 @@ class SyncStatusViewModel(
         initialValue = SyncStatus(),
     )
 
-    val runningUploads: StateFlow<Int> =
+    val uploadWorkSummary: StateFlow<WorkSummary> =
         workManager.getWorkInfosByTagFlow(WorkScheduler.TAG_UPLOAD)
-            .map { infos -> infos.count { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED } }
+            .map { infos ->
+                WorkSummary(
+                    running = infos.count { it.state == WorkInfo.State.RUNNING },
+                    enqueued = infos.count { it.state == WorkInfo.State.ENQUEUED },
+                    blocked = infos.count { it.state == WorkInfo.State.BLOCKED },
+                )
+            }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = 0,
+                initialValue = WorkSummary(),
+            )
+
+    val scanWorkSummary: StateFlow<WorkSummary> =
+        workManager.getWorkInfosByTagFlow(WorkScheduler.TAG_SCAN)
+            .map { infos ->
+                WorkSummary(
+                    running = infos.count { it.state == WorkInfo.State.RUNNING },
+                    enqueued = infos.count { it.state == WorkInfo.State.ENQUEUED },
+                    blocked = infos.count { it.state == WorkInfo.State.BLOCKED },
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = WorkSummary(),
             )
 
     fun syncNow() {
@@ -146,7 +173,10 @@ class SyncStatusViewModel(
     }
 
     fun clearQueue() {
-        WorkScheduler.clearQueue(appContext)
+        viewModelScope.launch {
+            WorkScheduler.clearQueue(appContext)
+            services.syncStatusRepository.clearQueuedCount()
+        }
     }
 
     fun resumeSync() {
@@ -223,7 +253,8 @@ class SyncStatusViewModel(
 @Composable
 private fun MainScreen(vm: SyncStatusViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
-    val runningUploads by vm.runningUploads.collectAsStateWithLifecycle()
+    val uploadWorkSummary by vm.uploadWorkSummary.collectAsStateWithLifecycle()
+    val scanWorkSummary by vm.scanWorkSummary.collectAsStateWithLifecycle()
     val authToken by vm.authToken.collectAsStateWithLifecycle()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -263,7 +294,8 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     } else {
         SyncDashboardScreen(
             status = status,
-            runningUploads = runningUploads,
+            uploadWorkSummary = uploadWorkSummary,
+            scanWorkSummary = scanWorkSummary,
             onSyncNow = { vm.syncNow() },
             onRetryFailed = { vm.retryFailedNow() },
             onStopSync = { vm.stopSync() },
@@ -420,7 +452,8 @@ private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
 @Composable
 private fun SyncDashboardScreen(
     status: SyncStatus,
-    runningUploads: Int,
+    uploadWorkSummary: SyncStatusViewModel.WorkSummary,
+    scanWorkSummary: SyncStatusViewModel.WorkSummary,
     onSyncNow: () -> Unit,
     onRetryFailed: () -> Unit,
     onStopSync: () -> Unit,
@@ -438,11 +471,12 @@ private fun SyncDashboardScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
-            Text("Queued: ${status.queuedCount}")
+            Text("Queued (pending): ${status.queuedCount}")
             Text("Uploaded: ${status.uploadedCount}")
             Text("Duplicates: ${status.duplicateCount}")
             Text("Failed: ${status.failedCount}")
-            Text("Running/Queued Jobs: $runningUploads")
+            Text("Scan Jobs: running=${scanWorkSummary.running}, enqueued=${scanWorkSummary.enqueued}, blocked=${scanWorkSummary.blocked}")
+            Text("Upload Jobs: running=${uploadWorkSummary.running}, enqueued=${uploadWorkSummary.enqueued}, blocked=${uploadWorkSummary.blocked}")
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onSyncNow) {
