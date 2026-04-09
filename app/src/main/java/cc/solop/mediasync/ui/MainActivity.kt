@@ -196,8 +196,11 @@ private fun MainScreen(vm: SyncStatusViewModel) {
 
             Text("Recent failed items", style = MaterialTheme.typography.titleMedium)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(status.uploadedItems) { uploaded ->
+                    Text("UPLOADED ${uploaded.key}: ${uploaded.uri}")
+                }
                 items(status.failedItems) { failed ->
-                    Text("${failed.reason}: ${failed.uri}")
+                    Text("FAILED ${failed.reason}: ${failed.uri}")
                 }
             }
         }

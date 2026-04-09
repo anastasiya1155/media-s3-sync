@@ -30,8 +30,8 @@ class UploadWorker(
 
         return try {
             Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
-            when (services.uploadOrchestrator.upload(candidate)) {
-                UploadResult.Uploaded -> statusRepo.incrementUploaded()
+            when (val result = services.uploadOrchestrator.upload(candidate)) {
+                is UploadResult.Uploaded -> statusRepo.incrementUploaded(candidate.uri, result.key)
                 UploadResult.Duplicate -> statusRepo.incrementDuplicate()
             }
             Log.d(TAG, "Upload success, uri=${candidate.uri}")

@@ -19,11 +19,19 @@ data class FailedUploadItem(
     val timestampEpochMs: Long,
 )
 
+@Serializable
+data class UploadedItem(
+    val uri: String,
+    val key: String,
+    val timestampEpochMs: Long,
+)
+
 data class SyncStatus(
     val queuedCount: Long = 0,
     val uploadedCount: Long = 0,
     val duplicateCount: Long = 0,
     val failedCount: Long = 0,
+    val uploadedItems: List<UploadedItem> = emptyList(),
     val failedItems: List<FailedUploadItem> = emptyList(),
     val lastScanEpochMs: Long = 0,
 )
@@ -40,12 +48,16 @@ class SyncStatusRepository(private val context: Context) {
     private val keyUploaded = longPreferencesKey("uploaded_count")
     private val keyDuplicate = longPreferencesKey("duplicate_count")
     private val keyFailed = longPreferencesKey("failed_count")
+    private val keyUploadedItems = stringPreferencesKey("uploaded_items_json")
     private val keyFailedItems = stringPreferencesKey("failed_items_json")
     private val keyLastScanEpochMs = longPreferencesKey("last_scan_epoch_ms")
     private val keyLastScanDateAddedSec = longPreferencesKey("last_scan_date_added_sec")
     private val keyLastScanMediaId = longPreferencesKey("last_scan_media_id")
 
     val statusFlow: Flow<SyncStatus> = context.appDataStore.data.map { prefs ->
+        val uploadedItems = prefs[keyUploadedItems]
+            ?.let { runCatching { json.decodeFromString<List<UploadedItem>>(it) }.getOrNull() }
+            ?: emptyList()
         val failedItems = prefs[keyFailedItems]
             ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
             ?: emptyList()
@@ -55,6 +67,7 @@ class SyncStatusRepository(private val context: Context) {
             uploadedCount = prefs[keyUploaded] ?: 0,
             duplicateCount = prefs[keyDuplicate] ?: 0,
             failedCount = prefs[keyFailed] ?: 0,
+            uploadedItems = uploadedItems,
             failedItems = failedItems,
             lastScanEpochMs = prefs[keyLastScanEpochMs] ?: 0,
         )
@@ -66,9 +79,18 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
-    suspend fun incrementUploaded() {
+    suspend fun incrementUploaded(uri: String, key: String) {
         context.appDataStore.edit { prefs ->
             prefs[keyUploaded] = (prefs[keyUploaded] ?: 0) + 1
+            val existing = prefs[keyUploadedItems]
+                ?.let { runCatching { json.decodeFromString<List<UploadedItem>>(it) }.getOrNull() }
+                ?: emptyList()
+            val updated = (listOf(UploadedItem(uri, key, System.currentTimeMillis())) + existing)
+                .take(MAX_UPLOADED_ITEMS)
+            prefs[keyUploadedItems] = json.encodeToString(
+                ListSerializer(UploadedItem.serializer()),
+                updated
+            )
         }
     }
 
@@ -129,5 +151,6 @@ class SyncStatusRepository(private val context: Context) {
 
     private companion object {
         const val MAX_FAILED_ITEMS = 200
+        const val MAX_UPLOADED_ITEMS = 200
     }
 }

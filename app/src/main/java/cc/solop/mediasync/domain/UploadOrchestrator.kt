@@ -16,7 +16,7 @@ import retrofit2.HttpException
 import java.io.IOException
 
 sealed class UploadResult {
-    data object Uploaded : UploadResult()
+    data class Uploaded(val key: String) : UploadResult()
     data object Duplicate : UploadResult()
 }
 
@@ -78,7 +78,7 @@ class UploadOrchestrator(
             throw classifyApiException("complete-upload failed", e)
         }
 
-        return UploadResult.Uploaded
+        return UploadResult.Uploaded(key)
     }
 
     private fun uploadToSignedUrl(uploadUrl: String, uri: Uri, mimeType: String, expectedSizeBytes: Long) {
