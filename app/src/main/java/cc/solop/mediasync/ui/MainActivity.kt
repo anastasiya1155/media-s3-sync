@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -667,6 +668,7 @@ private fun SyncDashboardScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilledTonalButton(onClick = onStartFreshSync, modifier = Modifier.weight(1f)) {
@@ -676,6 +678,7 @@ private fun SyncDashboardScreen(
                     onClick = onToggleSyncPause,
                     modifier = Modifier.size(40.dp),
                     shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
                 ) {
                     Icon(
                         imageVector = if (isSyncPaused) Icons.Filled.PlayCircle else Icons.Filled.PauseCircle,
@@ -686,6 +689,7 @@ private fun SyncDashboardScreen(
                     onClick = onLogout,
                     modifier = Modifier.size(40.dp),
                     shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Logout,
@@ -694,13 +698,13 @@ private fun SyncDashboardScreen(
                 }
             }
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            Column(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                        .padding(top = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Row(
