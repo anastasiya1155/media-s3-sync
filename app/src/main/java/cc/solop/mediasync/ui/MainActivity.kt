@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -201,7 +201,8 @@ private fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
@@ -236,7 +237,8 @@ private fun SyncDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
@@ -270,30 +272,28 @@ private fun SyncDashboardScreen(
             }
 
             Text("Recent uploaded items", style = MaterialTheme.typography.titleMedium)
-            LazyColumn(
+            Column(
                 modifier = Modifier.heightIn(max = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (status.uploadedItems.isEmpty() && status.uploadedCount > 0) {
-                    item {
-                        Text(
-                            "No recent uploaded records yet in this app version. " +
-                                "Only uploads after this update are listed.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    Text(
+                        "No recent uploaded records yet in this app version. " +
+                            "Only uploads after this update are listed.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-                items(status.uploadedItems) { uploaded ->
+                status.uploadedItems.forEach { uploaded ->
                     Text("UPLOADED ${uploaded.key}: ${uploaded.uri}")
                 }
             }
 
             Text("Recent failed items", style = MaterialTheme.typography.titleMedium)
-            LazyColumn(
+            Column(
                 modifier = Modifier.heightIn(max = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(status.failedItems) { failed ->
+                status.failedItems.forEach { failed ->
                     Text("FAILED ${failed.reason}: ${failed.uri}")
                 }
             }
