@@ -29,7 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
@@ -261,6 +265,10 @@ private fun LoginScreen(
                 value = email,
                 onValueChange = onEmailChange,
                 label = { Text("Email") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next,
+                ),
                 singleLine = true,
             )
             OutlinedTextField(
@@ -268,6 +276,11 @@ private fun LoginScreen(
                 value = password,
                 onValueChange = onPasswordChange,
                 label = { Text("Password") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
             )
             if (!error.isNullOrBlank()) {
