@@ -391,6 +391,14 @@ private fun MainScreen(vm: SyncStatusViewModel) {
         }
     }
 
+    LaunchedEffect(status.uploadedCount, status.duplicateCount, hasActiveWork, authToken) {
+        if (authToken.isNotBlank() && !hasActiveWork) {
+            // Ensure latest uploaded/duplicate item badges are reflected even if worker-state transitions are missed.
+            delay(200)
+            vm.loadLocalMedia()
+        }
+    }
+
     if (!isLoggedIn) {
         LoginScreen(
             email = email,
