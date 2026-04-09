@@ -27,13 +27,23 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.AutofillNode
+import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalAutofill
+import androidx.compose.ui.platform.LocalAutofillTree
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -267,7 +277,11 @@ private fun LoginScreen(
             Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
             Text("Sign in with the same account you use in Diary.")
             OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        rememberEmailAutofillModifier(onFill = onEmailChange)
+                    ),
                 value = email,
                 onValueChange = onEmailChange,
                 label = { Text("Email") },
@@ -278,7 +292,11 @@ private fun LoginScreen(
                 singleLine = true,
             )
             OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        rememberPasswordAutofillModifier(onFill = onPasswordChange)
+                    ),
                 value = password,
                 onValueChange = onPasswordChange,
                 label = { Text("Password") },
@@ -317,6 +335,60 @@ private fun LoginScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun rememberEmailAutofillModifier(onFill: (String) -> Unit): Modifier {
+    return rememberAutofillModifier(
+        autofillTypes = listOf(AutofillType.EmailAddress, AutofillType.Username),
+        onFill = onFill,
+    )
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun rememberPasswordAutofillModifier(onFill: (String) -> Unit): Modifier {
+    return rememberAutofillModifier(
+        autofillTypes = listOf(AutofillType.Password),
+        onFill = onFill,
+    )
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun rememberAutofillModifier(
+    autofillTypes: List<AutofillType>,
+    onFill: (String) -> Unit,
+): Modifier {
+    val autofill = LocalAutofill.current
+    val autofillTree = LocalAutofillTree.current
+    val onFillState = rememberUpdatedState(onFill)
+    val autofillNode = remember(autofillTypes) {
+        AutofillNode(
+            autofillTypes = autofillTypes,
+            onFill = { onFillState.value(it) },
+        )
+    }
+
+    DisposableEffect(autofillTree, autofillNode) {
+        autofillTree += autofillNode
+        onDispose {
+            autofillTree.children.remove(autofillNode.id)
+        }
+    }
+
+    return Modifier
+        .onGloballyPositioned { coordinates ->
+            autofillNode.boundingBox = coordinates.boundsInWindow()
+        }
+        .onFocusChanged { focusState ->
+            if (focusState.isFocused) {
+                autofill?.requestAutofillForNode(autofillNode)
+            } else {
+                autofill?.cancelAutofillForNode(autofillNode)
+            }
+        }
 }
 
 private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
