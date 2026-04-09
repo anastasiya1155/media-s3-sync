@@ -26,7 +26,7 @@ class PermanentUploadException(message: String, cause: Throwable? = null) : Exce
 class UploadOrchestrator(
     private val mediaApi: MediaApi,
     private val contentResolver: ContentResolver,
-    private val okHttpClient: OkHttpClient,
+    private val uploadHttpClient: OkHttpClient,
 ) {
     suspend fun upload(candidate: MediaCandidate): UploadResult {
         val uri = Uri.parse(candidate.uri)
@@ -98,7 +98,7 @@ class UploadOrchestrator(
             .put(requestBody)
             .build()
 
-        okHttpClient.newCall(request).execute().use { response ->
+        uploadHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw IOException("PUT failed with code ${response.code}")
             }

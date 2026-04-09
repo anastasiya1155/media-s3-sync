@@ -31,6 +31,10 @@ class ServiceLocator private constructor(private val appContext: Context) {
         OkHttpClient.Builder().addInterceptor(authInterceptor).build()
     }
 
+    val uploadHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder().build()
+    }
+
     val mediaApi: MediaApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
@@ -46,7 +50,7 @@ class ServiceLocator private constructor(private val appContext: Context) {
         UploadOrchestrator(
             mediaApi = mediaApi,
             contentResolver = appContext.contentResolver,
-            okHttpClient = okHttpClient,
+            uploadHttpClient = uploadHttpClient,
         )
     }
 

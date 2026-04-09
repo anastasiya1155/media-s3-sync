@@ -19,6 +19,12 @@ class UploadWorker(
         val candidate = readCandidate(inputData) ?: return Result.failure()
         val services = ServiceLocator.from(applicationContext)
         val statusRepo = services.syncStatusRepository
+        val token = services.tokenStore.getCachedToken().trim()
+
+        if (token.isBlank()) {
+            statusRepo.incrementFailed(candidate.uri, "Missing auth token. Save token and tap Retry Failed.")
+            return Result.failure()
+        }
 
         return try {
             when (services.uploadOrchestrator.upload(candidate)) {
@@ -27,16 +33,27 @@ class UploadWorker(
             }
             Result.success()
         } catch (e: RetryableUploadException) {
-            Result.retry()
+            if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
+                statusRepo.incrementFailed(candidate.uri, "Retry limit reached: ${e.message ?: "Unknown error"}")
+                Result.failure()
+            } else {
+                Result.retry()
+            }
         } catch (e: PermanentUploadException) {
             statusRepo.incrementFailed(candidate.uri, e.message ?: "Permanent failure")
             Result.failure()
         } catch (e: Exception) {
-            Result.retry()
+            if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
+                statusRepo.incrementFailed(candidate.uri, "Unexpected error: ${e.message ?: "Unknown error"}")
+                Result.failure()
+            } else {
+                Result.retry()
+            }
         }
     }
 
     companion object {
+        private const val MAX_RETRY_ATTEMPTS = 5
         private const val KEY_URI = "uri"
         private const val KEY_FILENAME = "filename"
         private const val KEY_MIME_TYPE = "mimeType"
