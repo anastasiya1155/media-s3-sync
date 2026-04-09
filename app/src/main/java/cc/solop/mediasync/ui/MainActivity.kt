@@ -122,10 +122,7 @@ class SyncStatusViewModel(
     }
 
     fun clearQueue() {
-        viewModelScope.launch {
-            WorkScheduler.clearQueue(appContext)
-            services.syncStatusRepository.skipBacklogFromNow()
-        }
+        WorkScheduler.clearQueue(appContext)
     }
 
     fun resumeSync() {
