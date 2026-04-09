@@ -591,45 +591,47 @@ private fun SyncDashboardScreen(
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatCard(
-                    title = "Pending",
-                    value = status.queuedCount.toString(),
-                    icon = { Icon(Icons.Filled.Schedule, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                )
-                StatCard(
-                    title = "Uploaded",
-                    value = status.uploadedCount.toString(),
-                    icon = { Icon(Icons.Filled.CloudUpload, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatCard(
-                    title = "Duplicates",
-                    value = status.duplicateCount.toString(),
-                    icon = { Icon(Icons.Filled.Sync, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                )
-                StatCard(
-                    title = "Failed",
-                    value = status.failedCount.toString(),
-                    icon = { Icon(Icons.Filled.ErrorOutline, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Workers", style = MaterialTheme.typography.titleMedium)
-                    Text("Scan • running ${scanWorkSummary.running} • queued ${scanWorkSummary.enqueued} • blocked ${scanWorkSummary.blocked}")
-                    Text("Upload • running ${uploadWorkSummary.running} • queued ${uploadWorkSummary.enqueued} • blocked ${uploadWorkSummary.blocked}")
+                    Text(
+                        "Pending ${status.queuedCount}  •  Uploaded ${status.uploadedCount}  •  Duplicates ${status.duplicateCount}  •  Failed ${status.failedCount}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Scan r:${scanWorkSummary.running} q:${scanWorkSummary.enqueued} b:${scanWorkSummary.blocked}  •  Upload r:${uploadWorkSummary.running} q:${uploadWorkSummary.enqueued} b:${uploadWorkSummary.blocked}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onSyncNow, modifier = Modifier.weight(1f)) {
+                    Text("Sync Now")
+                }
+                FilledTonalButton(onClick = onRetryFailed, modifier = Modifier.weight(1f)) {
+                    Text("Retry Failed")
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onStopSync, modifier = Modifier.weight(1f)) {
+                    Text("Stop Sync")
+                }
+                OutlinedButton(onClick = onResumeSync, modifier = Modifier.weight(1f)) {
+                    Text("Resume Sync")
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onClearQueue, modifier = Modifier.weight(1f)) {
+                    Text("Clear Queue")
+                }
+                OutlinedButton(onClick = onLogout, modifier = Modifier.weight(1f)) {
+                    Text("Log out")
                 }
             }
 
@@ -639,8 +641,8 @@ private fun SyncDashboardScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text("Library sync status (Gallery)", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -650,42 +652,15 @@ private fun SyncDashboardScreen(
                         Text("Loading local media...", style = MaterialTheme.typography.bodySmall)
                     }
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 112.dp),
-                        modifier = Modifier.heightIn(max = 420.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        columns = GridCells.Adaptive(minSize = 100.dp),
+                        modifier = Modifier.heightIn(max = 520.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(localMedia.take(120), key = { it.uri }) { item ->
                             LocalMediaPreviewCard(item = item)
                         }
                     }
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onSyncNow) {
-                    Text("Sync Now")
-                }
-                FilledTonalButton(onClick = onRetryFailed) {
-                    Text("Retry Failed")
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onStopSync) {
-                    Text("Stop Sync")
-                }
-                OutlinedButton(onClick = onResumeSync) {
-                    Text("Resume Sync")
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onClearQueue, modifier = Modifier.fillMaxWidth()) {
-                    Text("Clear Queue")
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onLogout) {
-                    Text("Log out")
                 }
             }
 
