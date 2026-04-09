@@ -21,10 +21,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -124,7 +124,11 @@ class SyncStatusViewModel(
         WorkScheduler.resumeSync(appContext)
     }
 
-    suspend fun setToken(token: String) {
+    fun getSavedToken(): String {
+        return services.tokenStore.getCachedToken()
+    }
+
+    fun setToken(token: String) {
         services.tokenStore.setToken(token)
     }
 
@@ -144,8 +148,10 @@ class SyncStatusViewModel(
 private fun MainScreen(vm: SyncStatusViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
     val runningUploads by vm.runningUploads.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
     var tokenText by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        tokenText = vm.getSavedToken()
+    }
 
     Scaffold { padding ->
         Column(
@@ -184,11 +190,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                 label = { Text("Auth token") },
                 singleLine = true,
             )
-            Button(onClick = {
-                scope.launch {
-                    vm.setToken(tokenText.trim())
-                }
-            }) {
+            Button(onClick = { vm.setToken(tokenText.trim()) }) {
                 Text("Save token")
             }
 

@@ -1,29 +1,24 @@
 package cc.solop.mediasync.data.auth
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import cc.solop.mediasync.BuildConfig
-import cc.solop.mediasync.data.store.appDataStore
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 
 class TokenStore(private val context: Context) {
-    private val tokenKey = stringPreferencesKey("auth_token")
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     @Volatile
-    private var cachedToken: String = BuildConfig.DEFAULT_AUTH_TOKEN
-
-    suspend fun warmup() {
-        cachedToken = context.appDataStore.data.map { it[tokenKey] ?: BuildConfig.DEFAULT_AUTH_TOKEN }.first()
-    }
+    private var cachedToken: String = prefs.getString(KEY_TOKEN, BuildConfig.DEFAULT_AUTH_TOKEN)
+        ?: BuildConfig.DEFAULT_AUTH_TOKEN
 
     fun getCachedToken(): String = cachedToken
 
-    suspend fun setToken(token: String) {
+    fun setToken(token: String) {
         cachedToken = token
-        context.appDataStore.edit { prefs ->
-            prefs[tokenKey] = token
-        }
+        prefs.edit().putString(KEY_TOKEN, token).apply()
+    }
+
+    companion object {
+        private const val PREFS_NAME = "media_sync_auth_prefs"
+        private const val KEY_TOKEN = "auth_token"
     }
 }
