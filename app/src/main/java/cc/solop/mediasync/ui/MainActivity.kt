@@ -16,7 +16,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -249,6 +254,7 @@ private fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onLogin: () -> Unit,
 ) {
+    var isPasswordVisible by remember { mutableStateOf(false) }
     Scaffold { padding ->
         Column(
             modifier = Modifier
@@ -280,7 +286,27 @@ private fun LoginScreen(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done,
                 ),
-                visualTransformation = PasswordVisualTransformation(),
+                visualTransformation = if (isPasswordVisible) {
+                    androidx.compose.ui.text.input.VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                        Icon(
+                            imageVector = if (isPasswordVisible) {
+                                Icons.Filled.VisibilityOff
+                            } else {
+                                Icons.Filled.Visibility
+                            },
+                            contentDescription = if (isPasswordVisible) {
+                                "Hide password"
+                            } else {
+                                "Show password"
+                            },
+                        )
+                    }
+                },
                 singleLine = true,
             )
             if (!error.isNullOrBlank()) {
