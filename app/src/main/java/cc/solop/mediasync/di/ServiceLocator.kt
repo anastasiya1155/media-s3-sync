@@ -9,10 +9,12 @@ import cc.solop.mediasync.data.repo.SyncStatusRepository
 import cc.solop.mediasync.domain.UploadOrchestrator
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.util.concurrent.TimeUnit
 
 class ServiceLocator private constructor(private val appContext: Context) {
 
@@ -33,7 +35,19 @@ class ServiceLocator private constructor(private val appContext: Context) {
     }
 
     val uploadHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder().build()
+        val dispatcher = Dispatcher().apply {
+            // Keep uploader parallelism modest to reduce socket contention on mobile networks.
+            maxRequests = 2
+            maxRequestsPerHost = 2
+        }
+        OkHttpClient.Builder()
+            .dispatcher(dispatcher)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.MINUTES)
+            .callTimeout(10, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
+            .build()
     }
 
     val mediaApi: MediaApi by lazy {
