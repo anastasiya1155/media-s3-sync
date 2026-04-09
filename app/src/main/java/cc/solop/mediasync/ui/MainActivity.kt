@@ -266,6 +266,8 @@ private fun SyncDashboardScreen(
                 Button(onClick = onClearQueue) {
                     Text("Clear Queue")
                 }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onLogout) {
                     Text("Log out")
                 }
