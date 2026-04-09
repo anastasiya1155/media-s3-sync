@@ -8,23 +8,36 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -328,8 +341,30 @@ private fun LoginScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
-            Text("Sign in with the same account you use in Diary.")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                            Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Media Sync", style = MaterialTheme.typography.titleLarge)
+                        Text("Sign in with your Diary account", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
             OutlinedTextField(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -382,9 +417,17 @@ private fun LoginScreen(
                 singleLine = true,
             )
             if (!error.isNullOrBlank()) {
-                Text(error)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Text(
+                        text = error,
+                        modifier = Modifier.padding(12.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
             }
-            Button(onClick = onLogin, enabled = !isLoggingIn) {
+            Button(onClick = onLogin, enabled = !isLoggingIn, modifier = Modifier.fillMaxWidth()) {
                 Text(if (isLoggingIn) "Logging in..." else "Log in")
             }
         }
@@ -470,65 +513,207 @@ private fun SyncDashboardScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Diary Media Sync MVP", style = MaterialTheme.typography.headlineSmall)
-            Text("Queued (pending): ${status.queuedCount}")
-            Text("Uploaded: ${status.uploadedCount}")
-            Text("Duplicates: ${status.duplicateCount}")
-            Text("Failed: ${status.failedCount}")
-            Text("Scan Jobs: running=${scanWorkSummary.running}, enqueued=${scanWorkSummary.enqueued}, blocked=${scanWorkSummary.blocked}")
-            Text("Upload Jobs: running=${uploadWorkSummary.running}, enqueued=${uploadWorkSummary.enqueued}, blocked=${uploadWorkSummary.blocked}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text("Photos", style = MaterialTheme.typography.headlineLarge)
+                    Text("Backup", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(
+                    modifier = Modifier.size(46.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Icon(Icons.Filled.CloudUpload, contentDescription = null)
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatCard(
+                    title = "Pending",
+                    value = status.queuedCount.toString(),
+                    icon = { Icon(Icons.Filled.Schedule, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                )
+                StatCard(
+                    title = "Uploaded",
+                    value = status.uploadedCount.toString(),
+                    icon = { Icon(Icons.Filled.CloudUpload, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatCard(
+                    title = "Duplicates",
+                    value = status.duplicateCount.toString(),
+                    icon = { Icon(Icons.Filled.Sync, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                )
+                StatCard(
+                    title = "Failed",
+                    value = status.failedCount.toString(),
+                    icon = { Icon(Icons.Filled.ErrorOutline, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Workers", style = MaterialTheme.typography.titleMedium)
+                    Text("Scan • running ${scanWorkSummary.running} • queued ${scanWorkSummary.enqueued} • blocked ${scanWorkSummary.blocked}")
+                    Text("Upload • running ${uploadWorkSummary.running} • queued ${uploadWorkSummary.enqueued} • blocked ${uploadWorkSummary.blocked}")
+                }
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onSyncNow) {
+                FilledTonalButton(onClick = onSyncNow) {
                     Text("Sync Now")
                 }
-                Button(onClick = onRetryFailed) {
+                FilledTonalButton(onClick = onRetryFailed) {
                     Text("Retry Failed")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onStopSync) {
+                OutlinedButton(onClick = onStopSync) {
                     Text("Stop Sync")
                 }
-                Button(onClick = onResumeSync) {
+                OutlinedButton(onClick = onResumeSync) {
                     Text("Resume Sync")
                 }
-                Button(onClick = onClearQueue) {
+                OutlinedButton(onClick = onClearQueue) {
                     Text("Clear Queue")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onLogout) {
+                OutlinedButton(onClick = onLogout) {
                     Text("Log out")
                 }
             }
 
-            Text("Recent uploaded items", style = MaterialTheme.typography.titleMedium)
-            Column(
-                modifier = Modifier.heightIn(max = 160.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
-                if (status.uploadedItems.isEmpty() && status.uploadedCount > 0) {
-                    Text(
-                        "No recent uploaded records yet in this app version. " +
-                            "Only uploads after this update are listed.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                status.uploadedItems.forEach { uploaded ->
-                    Text("UPLOADED ${uploaded.key}: ${uploaded.uri}")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Recent uploaded", style = MaterialTheme.typography.titleMedium)
+                    Column(
+                        modifier = Modifier.heightIn(max = 180.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (status.uploadedItems.isEmpty() && status.uploadedCount > 0) {
+                            Text(
+                                "No detailed uploaded records available from earlier app versions.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        status.uploadedItems.forEach { uploaded ->
+                            ActivityRow(
+                                title = uploaded.key,
+                                subtitle = uploaded.uri,
+                                icon = { Icon(Icons.Filled.CloudUpload, contentDescription = null) },
+                            )
+                        }
+                    }
                 }
             }
 
-            Text("Recent failed items", style = MaterialTheme.typography.titleMedium)
-            Column(
-                modifier = Modifier.heightIn(max = 160.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
-                status.failedItems.forEach { failed ->
-                    Text("FAILED ${failed.reason}: ${failed.uri}")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Recent failed", style = MaterialTheme.typography.titleMedium)
+                    Column(
+                        modifier = Modifier.heightIn(max = 180.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        status.failedItems.forEach { failed ->
+                            ActivityRow(
+                                title = failed.reason,
+                                subtitle = failed.uri,
+                                icon = { Icon(Icons.Filled.ErrorOutline, contentDescription = null) },
+                            )
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    title: String,
+    value: String,
+    icon: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(value, style = MaterialTheme.typography.headlineSmall)
+            }
+            Surface(
+                modifier = Modifier.size(30.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    icon()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityRow(
+    title: String,
+    subtitle: String,
+    icon: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Surface(
+            modifier = Modifier.size(30.dp),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                icon()
+            }
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
 }
