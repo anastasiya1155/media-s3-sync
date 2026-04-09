@@ -57,4 +57,16 @@ object WorkScheduler {
         val uniqueName = "UPLOAD_${candidate.stableId}"
         WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
     }
+
+    fun stopAllSync(context: Context) {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(PERIODIC_SCAN_WORK_NAME)
+        workManager.cancelAllWorkByTag(TAG_SCAN)
+        workManager.cancelAllWorkByTag(TAG_UPLOAD)
+    }
+
+    fun resumeSync(context: Context) {
+        schedulePeriodicScan(context)
+        enqueueScanNow(context)
+    }
 }

@@ -116,6 +116,14 @@ class SyncStatusViewModel(
         }
     }
 
+    fun stopSync() {
+        WorkScheduler.stopAllSync(appContext)
+    }
+
+    fun resumeSync() {
+        WorkScheduler.resumeSync(appContext)
+    }
+
     suspend fun setToken(token: String) {
         services.tokenStore.setToken(token)
     }
@@ -160,6 +168,12 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                 }
                 Button(onClick = { vm.retryFailedNow() }) {
                     Text("Retry Failed")
+                }
+                Button(onClick = { vm.stopSync() }) {
+                    Text("Stop Sync")
+                }
+                Button(onClick = { vm.resumeSync() }) {
+                    Text("Resume Sync")
                 }
             }
 
