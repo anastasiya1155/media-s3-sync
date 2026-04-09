@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -14,6 +15,7 @@ class MediaStoreScanner(private val context: Context) {
         sinceMediaIdExclusive: Long,
         limit: Int = Int.MAX_VALUE,
     ): List<MediaCandidate> {
+        val effectiveSinceSec = maxOf(sinceDateAddedSec, MIN_SYNC_DATE_ADDED_SEC)
         val collection = MediaStore.Files.getContentUri("external")
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
@@ -39,8 +41,8 @@ class MediaStoreScanner(private val context: Context) {
         val selectionArgs = arrayOf(
             MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
             MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
-            sinceDateAddedSec.toString(),
-            sinceDateAddedSec.toString(),
+            effectiveSinceSec.toString(),
+            effectiveSinceSec.toString(),
             sinceMediaIdExclusive.toString(),
         )
 
@@ -83,5 +85,8 @@ class MediaStoreScanner(private val context: Context) {
 
     private companion object {
         val ISO_INSTANT: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT.withZone(ZoneOffset.UTC)
+        val MIN_SYNC_DATE_ADDED_SEC: Long = LocalDate.parse("2026-04-04")
+            .atStartOfDay(ZoneOffset.UTC)
+            .toEpochSecond()
     }
 }
