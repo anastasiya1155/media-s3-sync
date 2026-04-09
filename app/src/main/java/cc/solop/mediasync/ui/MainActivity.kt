@@ -19,8 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
@@ -142,6 +143,8 @@ class SyncStatusViewModel(
         val uri: String,
         val filename: String,
         val bucketName: String,
+        val mediaId: Long,
+        val dateAddedSec: Long,
         val isSynced: Boolean,
     )
 
@@ -188,9 +191,6 @@ class SyncStatusViewModel(
 
     private val _isLoadingLocalMedia = MutableStateFlow(false)
     val isLoadingLocalMedia: StateFlow<Boolean> = _isLoadingLocalMedia
-
-    private val _cameraOnlyFilter = MutableStateFlow(true)
-    val cameraOnlyFilter: StateFlow<Boolean> = _cameraOnlyFilter
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -245,22 +245,26 @@ class SyncStatusViewModel(
         }
     }
 
-    fun loadLocalMedia(cameraOnly: Boolean = _cameraOnlyFilter.value) {
+    fun loadLocalMedia() {
         viewModelScope.launch {
-            _cameraOnlyFilter.value = cameraOnly
             _isLoadingLocalMedia.value = true
             try {
                 val local = services.mediaStoreScanner.listRecentMedia(
                     limit = 300,
-                    cameraOnly = cameraOnly,
                 )
                 val syncedUris = services.syncStatusRepository.getSyncedUrisSet()
+                val cursor = services.syncStatusRepository.getScanCursor()
                 _localMedia.value = local.map { item ->
+                    val coveredByScanCursor =
+                        item.dateAddedSec < cursor.dateAddedSec ||
+                            (item.dateAddedSec == cursor.dateAddedSec && item.mediaId <= cursor.mediaIdExclusive)
                     LocalMediaStatus(
                         uri = item.uri,
                         filename = item.filename,
                         bucketName = item.bucketName,
-                        isSynced = syncedUris.contains(item.uri),
+                        mediaId = item.mediaId,
+                        dateAddedSec = item.dateAddedSec,
+                        isSynced = syncedUris.contains(item.uri) || coveredByScanCursor,
                     )
                 }
             } finally {
@@ -317,7 +321,6 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val authToken by vm.authToken.collectAsStateWithLifecycle()
     val localMedia by vm.localMedia.collectAsStateWithLifecycle()
     val isLoadingLocalMedia by vm.isLoadingLocalMedia.collectAsStateWithLifecycle()
-    val cameraOnlyFilter by vm.cameraOnlyFilter.collectAsStateWithLifecycle()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
@@ -328,7 +331,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
             vm.validateTokenOnLoad()
-            vm.loadLocalMedia(cameraOnly = cameraOnlyFilter)
+            vm.loadLocalMedia()
         }
     }
 
@@ -361,14 +364,11 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             scanWorkSummary = scanWorkSummary,
             localMedia = localMedia,
             isLoadingLocalMedia = isLoadingLocalMedia,
-            cameraOnlyFilter = cameraOnlyFilter,
             onSyncNow = { vm.syncNow() },
             onRetryFailed = { vm.retryFailedNow() },
             onStopSync = { vm.stopSync() },
             onResumeSync = { vm.resumeSync() },
             onClearQueue = { vm.clearQueue() },
-            onShowCamera = { vm.loadLocalMedia(cameraOnly = true) },
-            onShowAllGallery = { vm.loadLocalMedia(cameraOnly = false) },
             onRefreshMediaStatus = { vm.loadLocalMedia() },
             onLogout = {
                 vm.setToken("")
@@ -555,14 +555,11 @@ private fun SyncDashboardScreen(
     scanWorkSummary: SyncStatusViewModel.WorkSummary,
     localMedia: List<SyncStatusViewModel.LocalMediaStatus>,
     isLoadingLocalMedia: Boolean,
-    cameraOnlyFilter: Boolean,
     onSyncNow: () -> Unit,
     onRetryFailed: () -> Unit,
     onStopSync: () -> Unit,
     onResumeSync: () -> Unit,
     onClearQueue: () -> Unit,
-    onShowCamera: () -> Unit,
-    onShowAllGallery: () -> Unit,
     onRefreshMediaStatus: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -645,23 +642,18 @@ private fun SyncDashboardScreen(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Library sync status", style = MaterialTheme.typography.titleMedium)
+                    Text("Library sync status (Gallery)", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(
-                            onClick = onShowCamera,
-                            enabled = !cameraOnlyFilter,
-                        ) { Text("Camera") }
-                        FilledTonalButton(
-                            onClick = onShowAllGallery,
-                            enabled = cameraOnlyFilter,
-                        ) { Text("Gallery") }
                         OutlinedButton(onClick = onRefreshMediaStatus) { Text("Refresh") }
                     }
                     if (isLoadingLocalMedia) {
                         Text("Loading local media...", style = MaterialTheme.typography.bodySmall)
                     }
-                    LazyRow(
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 112.dp),
+                        modifier = Modifier.heightIn(max = 420.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(localMedia.take(120), key = { it.uri }) { item ->
                             LocalMediaPreviewCard(item = item)
@@ -685,7 +677,9 @@ private fun SyncDashboardScreen(
                 OutlinedButton(onClick = onResumeSync) {
                     Text("Resume Sync")
                 }
-                OutlinedButton(onClick = onClearQueue) {
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onClearQueue, modifier = Modifier.fillMaxWidth()) {
                     Text("Clear Queue")
                 }
             }
@@ -759,7 +753,9 @@ private fun LocalMediaPreviewCard(
     item: SyncStatusViewModel.LocalMediaStatus,
 ) {
     Card(
-        modifier = Modifier.size(width = 132.dp, height = 172.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 160.dp, max = 176.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {

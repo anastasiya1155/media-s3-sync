@@ -14,6 +14,7 @@ class MediaStoreScanner(private val context: Context) {
         val uri: String,
         val filename: String,
         val bucketName: String,
+        val mediaId: Long,
         val dateAddedSec: Long,
     )
 
@@ -90,10 +91,7 @@ class MediaStoreScanner(private val context: Context) {
         return results
     }
 
-    fun listRecentMedia(
-        limit: Int = 300,
-        cameraOnly: Boolean = false,
-    ): List<LocalMediaItem> {
+    fun listRecentMedia(limit: Int = 300): List<LocalMediaItem> {
         val collection = MediaStore.Files.getContentUri("external")
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
@@ -103,24 +101,11 @@ class MediaStoreScanner(private val context: Context) {
             MediaStore.Files.FileColumns.MEDIA_TYPE,
         )
 
-        val mediaTypeFilter = "(${MediaStore.Files.FileColumns.MEDIA_TYPE}=? OR ${MediaStore.Files.FileColumns.MEDIA_TYPE}=?)"
-        val selection = if (cameraOnly) {
-            "$mediaTypeFilter AND LOWER(${MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME}) LIKE ?"
-        } else {
-            mediaTypeFilter
-        }
-        val selectionArgs = if (cameraOnly) {
-            arrayOf(
-                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
-                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
-                "%camera%",
-            )
-        } else {
-            arrayOf(
-                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
-                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
-            )
-        }
+        val selection = "(${MediaStore.Files.FileColumns.MEDIA_TYPE}=? OR ${MediaStore.Files.FileColumns.MEDIA_TYPE}=?)"
+        val selectionArgs = arrayOf(
+            MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+            MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
+        )
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC, ${MediaStore.Files.FileColumns._ID} DESC"
 
         val results = mutableListOf<LocalMediaItem>()
@@ -140,6 +125,7 @@ class MediaStoreScanner(private val context: Context) {
                     uri = uri,
                     filename = filename,
                     bucketName = bucket,
+                    mediaId = id,
                     dateAddedSec = addedSec,
                 )
             }
