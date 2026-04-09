@@ -1,10 +1,14 @@
 package cc.solop.mediasync.workers
 
+import android.content.pm.ServiceInfo
 import android.content.Context
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.work.ForegroundInfo
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
+import cc.solop.mediasync.app.MediaSyncApp
 import cc.solop.mediasync.data.media.MediaCandidate
 import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.domain.PermanentUploadException
@@ -29,6 +33,7 @@ class UploadWorker(
         }
 
         return try {
+            setForeground(createForegroundInfo(candidate))
             Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
             when (val result = services.uploadOrchestrator.upload(candidate)) {
                 is UploadResult.Uploaded -> statusRepo.incrementUploaded(candidate.uri, result.key)
@@ -61,6 +66,7 @@ class UploadWorker(
 
     companion object {
         private const val TAG = "UploadWorker"
+        private const val FOREGROUND_NOTIFICATION_ID = 11001
         private const val MAX_RETRY_ATTEMPTS = 5
         private const val KEY_URI = "uri"
         private const val KEY_FILENAME = "filename"
@@ -94,5 +100,25 @@ class UploadWorker(
                 sizeBytes = sizeBytes,
             )
         }
+    }
+
+    private fun createForegroundInfo(candidate: MediaCandidate): ForegroundInfo {
+        val notification = NotificationCompat.Builder(
+            applicationContext,
+            MediaSyncApp.UPLOAD_NOTIFICATION_CHANNEL_ID,
+        )
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentTitle("Syncing media")
+            .setContentText(candidate.filename)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setProgress(0, 0, true)
+            .build()
+
+        return ForegroundInfo(
+            FOREGROUND_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+        )
     }
 }

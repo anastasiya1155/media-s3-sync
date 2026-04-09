@@ -125,7 +125,11 @@ class MainActivity : ComponentActivity() {
 
     private fun ensureMediaPermissions() {
         val required = if (Build.VERSION.SDK_INT >= 33) {
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
