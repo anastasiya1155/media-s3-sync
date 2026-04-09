@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -57,6 +60,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -82,6 +86,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
 import retrofit2.HttpException
 
 class MainActivity : ComponentActivity() {
@@ -655,21 +660,11 @@ private fun SyncDashboardScreen(
                     if (isLoadingLocalMedia) {
                         Text("Loading local media...", style = MaterialTheme.typography.bodySmall)
                     }
-                    Column(
-                        modifier = Modifier.heightIn(max = 220.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        localMedia.forEach { item ->
-                            ActivityRow(
-                                title = item.filename,
-                                subtitle = "${item.bucketName} • ${if (item.isSynced) "Synced" else "Not synced"}",
-                                icon = {
-                                    Icon(
-                                        imageVector = if (item.isSynced) Icons.Filled.CloudUpload else Icons.Filled.Schedule,
-                                        contentDescription = null,
-                                    )
-                                },
-                            )
+                        items(localMedia.take(120), key = { it.uri }) { item ->
+                            LocalMediaPreviewCard(item = item)
                         }
                     }
                 }
@@ -754,6 +749,62 @@ private fun SyncDashboardScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalMediaPreviewCard(
+    item: SyncStatusViewModel.LocalMediaStatus,
+) {
+    Card(
+        modifier = Modifier.size(width = 132.dp, height = 172.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = item.uri,
+                contentDescription = item.filename,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp, max = 120.dp),
+                contentScale = ContentScale.Crop,
+            )
+            Surface(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopEnd)
+                    .padding(6.dp),
+                shape = MaterialTheme.shapes.small,
+                color = if (item.isSynced) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.tertiaryContainer
+                },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        imageVector = if (item.isSynced) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Text(
+                        text = if (item.isSynced) "Synced" else "Pending",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomStart)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(item.filename, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                Text(item.bucketName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
