@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -683,7 +684,7 @@ private fun SyncDashboardScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(6.dp),
+                        .padding(0.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Row(
@@ -699,10 +700,10 @@ private fun SyncDashboardScreen(
                         Text("Loading local media...", style = MaterialTheme.typography.bodySmall)
                     }
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 100.dp),
+                        columns = GridCells.Fixed(4),
                         modifier = Modifier.heightIn(max = 520.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
                         items(localMedia.take(120), key = { it.uri }) { item ->
                             LocalMediaPreviewCard(item = item)
@@ -785,75 +786,54 @@ private fun LocalMediaPreviewCard(
         }
         .build()
 
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 160.dp, max = 176.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            .aspectRatio(1f),
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = previewRequest,
-                contentDescription = item.filename,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 120.dp),
-                contentScale = ContentScale.Crop,
-            )
-            if (isVideo) {
-                Surface(
-                    modifier = Modifier
-                        .align(androidx.compose.ui.Alignment.Center)
-                        .size(28.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
-                ) {
-                    Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
+        AsyncImage(
+            model = previewRequest,
+            contentDescription = item.filename,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        if (isVideo) {
             Surface(
                 modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopEnd)
-                    .padding(6.dp),
+                    .align(androidx.compose.ui.Alignment.Center)
+                    .size(24.dp),
                 shape = MaterialTheme.shapes.small,
-                color = if (item.isSynced) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.tertiaryContainer
-                },
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
                     Icon(
-                        imageVector = if (item.isSynced) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
+                        imageVector = Icons.Filled.PlayCircle,
                         contentDescription = null,
-                        modifier = Modifier.size(12.dp),
-                    )
-                    Text(
-                        text = if (item.isSynced) "Synced" else "Pending",
-                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
-            Column(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.BottomStart)
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(item.filename, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                Text(item.bucketName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
         }
-    }
+        Surface(
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.TopEnd)
+                .padding(4.dp),
+            shape = MaterialTheme.shapes.small,
+            color = if (item.isSynced) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.tertiaryContainer
+            },
+        ) {
+            Icon(
+                imageVector = if (item.isSynced) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
+                contentDescription = if (item.isSynced) "Synced" else "Pending",
+                modifier = Modifier
+                    .padding(3.dp)
+                    .size(12.dp),
+            )
+        }
+            }
 }
 
 @Composable
