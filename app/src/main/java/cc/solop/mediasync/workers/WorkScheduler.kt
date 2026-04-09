@@ -19,7 +19,7 @@ object WorkScheduler {
 
     fun schedulePeriodicScan(context: Context) {
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiredNetworkType(NetworkType.UNMETERED)
             .setRequiresBatteryNotLow(true)
             .build()
 
@@ -36,7 +36,12 @@ object WorkScheduler {
     }
 
     fun enqueueScanNow(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .build()
+
         val request = OneTimeWorkRequestBuilder<MediaScanWorker>()
+            .setConstraints(constraints)
             .addTag(TAG_SCAN)
             .build()
         WorkManager.getInstance(context).enqueue(request)
@@ -44,7 +49,7 @@ object WorkScheduler {
 
     fun enqueueUpload(context: Context, candidate: MediaCandidate) {
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiredNetworkType(NetworkType.UNMETERED)
             .build()
 
         val request = OneTimeWorkRequestBuilder<UploadWorker>()
