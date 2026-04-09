@@ -56,7 +56,7 @@ class UploadOrchestrator(
         val key = initResponse.key ?: throw PermanentUploadException("Missing key from init-upload")
 
         try {
-            uploadToSignedUrl(uploadUrl, uri, candidate.mimeType)
+            uploadToSignedUrl(uploadUrl, uri, candidate.mimeType, candidate.sizeBytes)
         } catch (e: Exception) {
             failUploadSafely(key, "upload-put-failed: ${e.message}")
             throw classifyNetworkException("PUT upload failed", e)
@@ -81,9 +81,12 @@ class UploadOrchestrator(
         return UploadResult.Uploaded
     }
 
-    private fun uploadToSignedUrl(uploadUrl: String, uri: Uri, mimeType: String) {
+    private fun uploadToSignedUrl(uploadUrl: String, uri: Uri, mimeType: String, expectedSizeBytes: Long) {
+        val contentLength = resolveContentLength(uri, expectedSizeBytes)
         val requestBody = object : RequestBody() {
             override fun contentType() = mimeType.toMediaType()
+
+            override fun contentLength(): Long = contentLength
 
             override fun writeTo(sink: BufferedSink) {
                 contentResolver.openInputStream(uri).use { input ->
@@ -106,6 +109,15 @@ class UploadOrchestrator(
                 throw IOException("PUT failed with code ${response.code}, message=${response.message}, body=$responseBody")
             }
         }
+    }
+
+    private fun resolveContentLength(uri: Uri, expectedSizeBytes: Long): Long {
+        if (expectedSizeBytes > 0) return expectedSizeBytes
+        val descriptorLength = runCatching {
+            contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+        }.getOrNull() ?: -1L
+        if (descriptorLength > 0) return descriptorLength
+        throw PermanentUploadException("Cannot determine content length for $uri")
     }
 
     private suspend fun failUploadSafely(key: String, reason: String) {
@@ -140,7 +152,14 @@ class UploadOrchestrator(
 
     private fun classifyNetworkException(prefix: String, throwable: Throwable): Exception {
         return when (throwable) {
-            is IOException -> RetryableUploadException(prefix, throwable)
+            is IOException -> {
+                val msg = throwable.message.orEmpty()
+                if ("code 501" in msg) {
+                    PermanentUploadException("$prefix: $msg", throwable)
+                } else {
+                    RetryableUploadException(prefix, throwable)
+                }
+            }
             else -> PermanentUploadException(prefix, throwable)
         }
     }
