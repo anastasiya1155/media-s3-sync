@@ -43,6 +43,6 @@ class MediaScanWorker(
     }
 
     private companion object {
-        const val BATCH_SIZE = 1
+        const val BATCH_SIZE = 100
     }
 }
