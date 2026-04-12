@@ -1,5 +1,7 @@
 package cc.solop.mediasync.workers
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.content.Context
 import android.util.Log
@@ -14,6 +16,7 @@ import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.domain.PermanentUploadException
 import cc.solop.mediasync.domain.RetryableUploadException
 import cc.solop.mediasync.domain.UploadResult
+import cc.solop.mediasync.ui.MainActivity
 
 class UploadWorker(
     appContext: Context,
@@ -103,6 +106,16 @@ class UploadWorker(
     }
 
     private fun createForegroundInfo(candidate: MediaCandidate): ForegroundInfo {
+        val contentIntent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            applicationContext,
+            0,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val notification = NotificationCompat.Builder(
             applicationContext,
             MediaSyncApp.UPLOAD_NOTIFICATION_CHANNEL_ID,
@@ -110,7 +123,9 @@ class UploadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle("Syncing media")
             .setContentText(candidate.filename)
+            .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setProgress(0, 0, true)
             .build()
