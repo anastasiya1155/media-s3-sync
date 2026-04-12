@@ -189,6 +189,10 @@ class MediaStoreScanner(private val context: Context) {
         return null
     }
 
+    fun isBeforeSyncStart(dateAddedSec: Long): Boolean {
+        return dateAddedSec < MIN_SYNC_DATE_ADDED_SEC
+    }
+
     private companion object {
         val ISO_INSTANT: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT.withZone(ZoneOffset.UTC)
         val MIN_SYNC_DATE_ADDED_SEC: Long = LocalDate.parse("2026-04-04")

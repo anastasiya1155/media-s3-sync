@@ -376,6 +376,7 @@ class SyncStatusViewModel(
                 _localMedia.value = local.map { item ->
                     val syncState = when {
                         syncedUris.contains(item.uri) -> MediaSyncState.SYNCED
+                        services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> MediaSyncState.SYNCED
                         runningUris.contains(item.uri) -> MediaSyncState.SYNCING
                         queuedUris.contains(item.uri) -> MediaSyncState.PENDING
                         failedUris.contains(item.uri) -> MediaSyncState.FAILED
