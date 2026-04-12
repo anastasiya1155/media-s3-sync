@@ -165,8 +165,15 @@ class SyncStatusViewModel(
         val mimeType: String,
         val mediaId: Long,
         val dateAddedSec: Long,
-        val isSynced: Boolean,
+        val syncState: MediaSyncState,
     )
+
+    enum class MediaSyncState {
+        PENDING,
+        SYNCING,
+        SYNCED,
+        FAILED,
+    }
 
     val authToken: StateFlow<String> = services.tokenStore.tokenFlow
 
@@ -335,11 +342,13 @@ class SyncStatusViewModel(
                     limit = 300,
                 )
                 val syncedUris = services.syncStatusRepository.getSyncedUrisSet()
-                val cursor = services.syncStatusRepository.getScanCursor()
+                val failedUris = services.syncStatusRepository.getFailedUrisSet()
                 _localMedia.value = local.map { item ->
-                    val coveredByScanCursor =
-                        item.dateAddedSec < cursor.dateAddedSec ||
-                            (item.dateAddedSec == cursor.dateAddedSec && item.mediaId <= cursor.mediaIdExclusive)
+                    val syncState = when {
+                        syncedUris.contains(item.uri) -> MediaSyncState.SYNCED
+                        failedUris.contains(item.uri) -> MediaSyncState.FAILED
+                        else -> MediaSyncState.PENDING
+                    }
                     LocalMediaStatus(
                         uri = item.uri,
                         filename = item.filename,
@@ -347,7 +356,7 @@ class SyncStatusViewModel(
                         mimeType = item.mimeType,
                         mediaId = item.mediaId,
                         dateAddedSec = item.dateAddedSec,
-                        isSynced = syncedUris.contains(item.uri) || coveredByScanCursor,
+                        syncState = syncState,
                     )
                 }
             } finally {
@@ -903,15 +912,26 @@ private fun LocalMediaPreviewCard(
                 .align(androidx.compose.ui.Alignment.TopEnd)
                 .padding(3.dp),
             shape = MaterialTheme.shapes.small,
-            color = if (item.isSynced) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.tertiaryContainer
+            color = when (item.syncState) {
+                SyncStatusViewModel.MediaSyncState.SYNCED -> MaterialTheme.colorScheme.primaryContainer
+                SyncStatusViewModel.MediaSyncState.SYNCING -> MaterialTheme.colorScheme.secondaryContainer
+                SyncStatusViewModel.MediaSyncState.FAILED -> MaterialTheme.colorScheme.errorContainer
+                SyncStatusViewModel.MediaSyncState.PENDING -> MaterialTheme.colorScheme.tertiaryContainer
             },
         ) {
             Icon(
-                imageVector = if (item.isSynced) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
-                contentDescription = if (item.isSynced) "Synced" else "Pending",
+                imageVector = when (item.syncState) {
+                    SyncStatusViewModel.MediaSyncState.SYNCED -> Icons.Filled.CheckCircle
+                    SyncStatusViewModel.MediaSyncState.SYNCING -> Icons.Filled.Sync
+                    SyncStatusViewModel.MediaSyncState.FAILED -> Icons.Filled.ErrorOutline
+                    SyncStatusViewModel.MediaSyncState.PENDING -> Icons.Filled.Schedule
+                },
+                contentDescription = when (item.syncState) {
+                    SyncStatusViewModel.MediaSyncState.SYNCED -> "Synced"
+                    SyncStatusViewModel.MediaSyncState.SYNCING -> "Syncing"
+                    SyncStatusViewModel.MediaSyncState.FAILED -> "Failed"
+                    SyncStatusViewModel.MediaSyncState.PENDING -> "Pending"
+                },
                 modifier = Modifier
                     .padding(2.dp)
                     .size(11.dp),

@@ -211,6 +211,14 @@ class SyncStatusRepository(private val context: Context) {
         return synced.toSet()
     }
 
+    suspend fun getFailedUrisSet(): Set<String> {
+        val prefs = context.appDataStore.data.first()
+        val failed = prefs[keyFailedItems]
+            ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
+            ?: emptyList()
+        return failed.map { it.uri }.toSet()
+    }
+
     private companion object {
         const val MAX_FAILED_ITEMS = 200
         const val MAX_UPLOADED_ITEMS = 200
