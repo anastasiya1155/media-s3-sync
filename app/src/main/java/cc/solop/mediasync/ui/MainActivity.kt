@@ -222,9 +222,11 @@ class SyncStatusViewModel(
     val isSyncPaused: StateFlow<Boolean> = _isSyncPaused
     private var mediaStoreObserver: ContentObserver? = null
     private var mediaStoreDebounceJob: Job? = null
+    private var reconcileJob: Job? = null
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
+        reconcileStuckUploads(includeFailed = true)
         loadLocalMedia()
     }
 
@@ -250,6 +252,7 @@ class SyncStatusViewModel(
 
     fun resumeSync() {
         WorkScheduler.resumeSync(appContext)
+        reconcileStuckUploads(includeFailed = true)
         _isSyncPaused.value = false
         loadLocalMedia()
     }
@@ -293,7 +296,27 @@ class SyncStatusViewModel(
         mediaStoreDebounceJob = viewModelScope.launch {
             delay(700)
             WorkScheduler.enqueueScanNow(appContext)
+            reconcileStuckUploads(includeFailed = false)
             loadLocalMedia()
+        }
+    }
+
+    fun reconcileStuckUploads(includeFailed: Boolean) {
+        if (reconcileJob?.isActive == true) return
+        reconcileJob = viewModelScope.launch {
+            val queuedUris = services.syncStatusRepository.getQueuedUrisSet()
+            val retryUris = if (includeFailed) services.syncStatusRepository.getFailedUrisSet() else emptySet()
+            val targets = (queuedUris + retryUris).take(100)
+            if (targets.isEmpty()) return@launch
+            targets.forEach { uri ->
+                val candidate = services.mediaStoreScanner.resolveCandidate(uri)
+                if (candidate == null) {
+                    services.syncStatusRepository.removeTransientUri(uri)
+                } else {
+                    services.syncStatusRepository.addQueuedUris(listOf(uri))
+                    WorkScheduler.enqueueUpload(appContext, candidate)
+                }
+            }
         }
     }
 
@@ -446,6 +469,12 @@ private fun MainScreen(vm: SyncStatusViewModel) {
         scanWorkSummary.enqueued > 0 ||
         uploadWorkSummary.running > 0 ||
         uploadWorkSummary.enqueued > 0
+
+    LaunchedEffect(hasActiveWork, status.queuedCount, isSyncPaused, authToken) {
+        if (authToken.isNotBlank() && !isSyncPaused && !hasActiveWork && status.queuedCount > 0) {
+            vm.reconcileStuckUploads(includeFailed = false)
+        }
+    }
 
     LaunchedEffect(hasActiveWork) {
         if (hasActiveWork) {

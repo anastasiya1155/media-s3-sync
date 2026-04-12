@@ -2,6 +2,7 @@ package cc.solop.mediasync.data.media
 
 import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
 import android.provider.MediaStore
 import java.time.Instant
 import java.time.LocalDate
@@ -136,6 +137,56 @@ class MediaStoreScanner(private val context: Context) {
             }
         }
         return results
+    }
+
+    fun resolveCandidate(uri: String): MediaCandidate? {
+        val contentUri = runCatching { Uri.parse(uri) }.getOrNull() ?: return null
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.MIME_TYPE,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_ADDED,
+            MediaStore.Files.FileColumns.DATE_TAKEN,
+            MediaStore.Files.FileColumns.MEDIA_TYPE,
+        )
+        context.contentResolver.query(contentUri, projection, null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return null
+            val idIx = cursor.getColumnIndex(MediaStore.Files.FileColumns._ID)
+            val nameIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DISPLAY_NAME)
+            val mimeIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.MIME_TYPE)
+            val sizeIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.SIZE)
+            val addedIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_ADDED)
+            val takenIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_TAKEN)
+            val mediaTypeIx = cursor.getColumnIndex(MediaStore.Files.FileColumns.MEDIA_TYPE)
+
+            val mediaType = if (mediaTypeIx >= 0) cursor.getInt(mediaTypeIx) else -1
+            if (mediaType != MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE &&
+                mediaType != MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+            ) {
+                return null
+            }
+            val id = if (idIx >= 0) cursor.getLong(idIx) else 0L
+            val filename = if (nameIx >= 0) cursor.getString(nameIx) ?: "media_$id" else "media_$id"
+            val mimeType = if (mimeIx >= 0) cursor.getString(mimeIx) ?: "application/octet-stream" else "application/octet-stream"
+            val sizeBytes = if (sizeIx >= 0) cursor.getLong(sizeIx) else 0L
+            if (sizeBytes <= 0L) return null
+            val dateAddedSec = if (addedIx >= 0) cursor.getLong(addedIx) else 0L
+            val dateTakenMs = if (takenIx >= 0) cursor.getLong(takenIx) else 0L
+            val dateAddedMs = dateAddedSec * 1000L
+            val capturedAtMs = if (dateTakenMs > 0) dateTakenMs else dateAddedMs
+
+            return MediaCandidate(
+                uri = uri,
+                filename = filename,
+                mimeType = mimeType,
+                capturedAtIso = ISO_INSTANT.format(Instant.ofEpochMilli(capturedAtMs)),
+                sizeBytes = sizeBytes,
+                mediaId = id,
+                dateAddedEpochMs = dateAddedMs,
+            )
+        }
+        return null
     }
 
     private companion object {

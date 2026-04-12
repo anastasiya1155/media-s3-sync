@@ -288,6 +288,17 @@ class SyncStatusRepository(private val context: Context) {
         return decodeStringList(prefs[keyRunningUris]).toSet()
     }
 
+    suspend fun removeTransientUri(uri: String) {
+        context.appDataStore.edit { prefs ->
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+            queued.remove(uri)
+            running.remove(uri)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+        }
+    }
+
     private fun decodeStringList(raw: String?): List<String> {
         return raw?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
     }
