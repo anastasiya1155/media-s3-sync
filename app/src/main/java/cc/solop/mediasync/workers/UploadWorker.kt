@@ -16,6 +16,7 @@ import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.domain.PermanentUploadException
 import cc.solop.mediasync.domain.RetryableUploadException
 import cc.solop.mediasync.domain.UploadResult
+import cc.solop.mediasync.data.sync.MediaSyncState
 import cc.solop.mediasync.ui.MainActivity
 
 class UploadWorker(
@@ -32,16 +33,24 @@ class UploadWorker(
         if (token.isBlank()) {
             Log.e(TAG, "Upload failed: missing token, uri=${candidate.uri}")
             statusRepo.incrementFailed(candidate.uri, "Missing auth token. Save token and tap Retry Failed.")
+            services.mediaSyncStore.markState(candidate.uri, MediaSyncState.FAILED, "Missing auth token")
             return Result.failure()
         }
 
         return try {
             statusRepo.markRunning(candidate.uri)
+            services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCING)
             setForeground(createForegroundInfo(candidate))
             Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
             when (val result = services.uploadOrchestrator.upload(candidate)) {
-                is UploadResult.Uploaded -> statusRepo.incrementUploaded(candidate.uri, result.key)
-                UploadResult.Duplicate -> statusRepo.incrementDuplicate(candidate.uri)
+                is UploadResult.Uploaded -> {
+                    statusRepo.incrementUploaded(candidate.uri, result.key)
+                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCED)
+                }
+                UploadResult.Duplicate -> {
+                    statusRepo.incrementDuplicate(candidate.uri)
+                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SKIPPED)
+                }
             }
             Log.d(TAG, "Upload success, uri=${candidate.uri}")
             Result.success()
@@ -49,22 +58,27 @@ class UploadWorker(
             Log.w(TAG, "Retryable upload failure, uri=${candidate.uri}, attempt=${runAttemptCount + 1}: ${e.message}", e)
             if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
                 statusRepo.incrementFailed(candidate.uri, "Retry limit reached: ${e.message ?: "Unknown error"}")
+                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.FAILED, "Retry limit reached: ${e.message ?: "Unknown error"}")
                 Result.failure()
             } else {
                 statusRepo.markRetryPending(candidate.uri)
+                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.PENDING)
                 Result.retry()
             }
         } catch (e: PermanentUploadException) {
             Log.e(TAG, "Permanent upload failure, uri=${candidate.uri}: ${e.message}", e)
             statusRepo.incrementFailed(candidate.uri, e.message ?: "Permanent failure")
+            services.mediaSyncStore.markState(candidate.uri, MediaSyncState.FAILED, e.message ?: "Permanent failure")
             Result.failure()
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected upload failure, uri=${candidate.uri}: ${e.message}", e)
             if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
                 statusRepo.incrementFailed(candidate.uri, "Unexpected error: ${e.message ?: "Unknown error"}")
+                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.FAILED, "Unexpected error: ${e.message ?: "Unknown error"}")
                 Result.failure()
             } else {
                 statusRepo.markRetryPending(candidate.uri)
+                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.PENDING)
                 Result.retry()
             }
         }

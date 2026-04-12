@@ -1,12 +1,15 @@
 package cc.solop.mediasync.di
 
 import android.content.Context
+import androidx.room.Room
 import cc.solop.mediasync.BuildConfig
 import cc.solop.mediasync.data.api.AuthApi
 import cc.solop.mediasync.data.api.MediaApi
 import cc.solop.mediasync.data.auth.TokenStore
 import cc.solop.mediasync.data.media.MediaStoreScanner
 import cc.solop.mediasync.data.repo.SyncStatusRepository
+import cc.solop.mediasync.data.sync.MediaSyncDatabase
+import cc.solop.mediasync.data.sync.MediaSyncStore
 import cc.solop.mediasync.domain.UploadOrchestrator
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -91,6 +94,14 @@ class ServiceLocator private constructor(private val appContext: Context) {
 
     val mediaStoreScanner: MediaStoreScanner by lazy { MediaStoreScanner(appContext) }
     val syncStatusRepository: SyncStatusRepository by lazy { SyncStatusRepository(appContext) }
+    private val mediaSyncDatabase: MediaSyncDatabase by lazy {
+        Room.databaseBuilder(
+            appContext,
+            MediaSyncDatabase::class.java,
+            "media_sync.db",
+        ).build()
+    }
+    val mediaSyncStore: MediaSyncStore by lazy { MediaSyncStore(mediaSyncDatabase.mediaSyncDao()) }
     val uploadOrchestrator: UploadOrchestrator by lazy {
         UploadOrchestrator(
             mediaApi = mediaApi,

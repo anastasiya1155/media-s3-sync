@@ -21,6 +21,7 @@ class MediaScanWorker(
                 sinceMediaIdExclusive = cursor.mediaIdExclusive,
                 limit = BATCH_SIZE,
             )
+            services.mediaSyncStore.markPending(candidates)
             candidates.forEach { WorkScheduler.enqueueUpload(applicationContext, it) }
 
             if (candidates.isNotEmpty()) {

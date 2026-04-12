@@ -89,6 +89,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import cc.solop.mediasync.data.api.LoginRequest
 import cc.solop.mediasync.data.repo.SyncStatus
+import cc.solop.mediasync.data.sync.MediaSyncState as DbMediaSyncState
 import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.workers.WorkScheduler
 import kotlinx.coroutines.Dispatchers
@@ -309,16 +310,17 @@ class SyncStatusViewModel(
     fun reconcileStuckUploads(includeFailed: Boolean) {
         if (reconcileJob?.isActive == true) return
         reconcileJob = viewModelScope.launch {
-            val queuedUris = services.syncStatusRepository.getQueuedUrisSet()
-            val retryUris = if (includeFailed) services.syncStatusRepository.getFailedUrisSet() else emptySet()
-            val targets = (queuedUris + retryUris).take(100)
+            val queuedUris = services.mediaSyncStore.getPendingUris(limit = 100)
+            val retryUris = if (includeFailed) services.mediaSyncStore.getFailedUris(limit = 100) else emptyList()
+            val targets = (queuedUris + retryUris).distinct().take(100)
             if (targets.isEmpty()) return@launch
             targets.forEach { uri ->
                 val candidate = services.mediaStoreScanner.resolveCandidate(uri)
                 if (candidate == null) {
-                    services.syncStatusRepository.removeTransientUri(uri)
+                    // Media item removed from device; no further sync work required.
+                    services.mediaSyncStore.markState(uri, DbMediaSyncState.SKIPPED)
                 } else {
-                    services.syncStatusRepository.addQueuedUris(listOf(uri))
+                    services.mediaSyncStore.markPending(listOf(candidate))
                     WorkScheduler.enqueueUpload(appContext, candidate, replaceExisting = true)
                 }
             }
@@ -329,6 +331,7 @@ class SyncStatusViewModel(
         viewModelScope.launch {
             WorkScheduler.stopAllSync(appContext)
             services.syncStatusRepository.resetAllStateForFreshStart()
+            services.mediaSyncStore.clearAll()
             WorkScheduler.resumeSync(appContext)
             _isSyncPaused.value = false
             loadLocalMedia()
@@ -369,17 +372,15 @@ class SyncStatusViewModel(
                 val local = services.mediaStoreScanner.listRecentMedia(
                     limit = 300,
                 )
-                val syncedUris = services.syncStatusRepository.getSyncedUrisSet()
-                val runningUris = services.syncStatusRepository.getRunningUrisSet()
-                val queuedUris = services.syncStatusRepository.getQueuedUrisSet()
-                val failedUris = services.syncStatusRepository.getFailedUrisSet()
+                val statesByUri = services.mediaSyncStore.getStateMap(local.map { it.uri })
                 _localMedia.value = local.map { item ->
+                    val dbState = statesByUri[item.uri]
                     val syncState = when {
-                        syncedUris.contains(item.uri) -> MediaSyncState.SYNCED
                         services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> MediaSyncState.SYNCED
-                        runningUris.contains(item.uri) -> MediaSyncState.SYNCING
-                        queuedUris.contains(item.uri) -> MediaSyncState.PENDING
-                        failedUris.contains(item.uri) -> MediaSyncState.FAILED
+                        dbState == DbMediaSyncState.SYNCED || dbState == DbMediaSyncState.SKIPPED -> MediaSyncState.SYNCED
+                        dbState == DbMediaSyncState.SYNCING -> MediaSyncState.SYNCING
+                        dbState == DbMediaSyncState.FAILED -> MediaSyncState.FAILED
+                        dbState == DbMediaSyncState.PENDING -> MediaSyncState.PENDING
                         else -> MediaSyncState.PENDING
                     }
                     LocalMediaStatus(
@@ -475,9 +476,10 @@ private fun MainScreen(vm: SyncStatusViewModel) {
         scanWorkSummary.enqueued > 0 ||
         uploadWorkSummary.running > 0 ||
         uploadWorkSummary.enqueued > 0
+    val hasPendingLocal = localMedia.any { it.syncState == SyncStatusViewModel.MediaSyncState.PENDING }
 
-    LaunchedEffect(hasActiveWork, status.queuedCount, isSyncPaused, authToken) {
-        if (authToken.isNotBlank() && !isSyncPaused && !hasActiveWork && status.queuedCount > 0) {
+    LaunchedEffect(hasActiveWork, hasPendingLocal, isSyncPaused, authToken) {
+        if (authToken.isNotBlank() && !isSyncPaused && !hasActiveWork && hasPendingLocal) {
             vm.reconcileStuckUploads(includeFailed = false)
         }
     }
