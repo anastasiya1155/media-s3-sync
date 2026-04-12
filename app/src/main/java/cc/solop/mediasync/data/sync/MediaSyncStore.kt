@@ -3,6 +3,14 @@ package cc.solop.mediasync.data.sync
 import cc.solop.mediasync.data.media.MediaCandidate
 
 class MediaSyncStore(private val dao: MediaSyncDao) {
+    data class SyncOverview(
+        val pending: Int = 0,
+        val syncing: Int = 0,
+        val synced: Int = 0,
+        val failed: Int = 0,
+        val skipped: Int = 0,
+        val unknown: Int = 0,
+    )
 
     suspend fun markPending(candidates: List<MediaCandidate>) {
         if (candidates.isEmpty()) return
@@ -71,6 +79,17 @@ class MediaSyncStore(private val dao: MediaSyncDao) {
 
     suspend fun getFailedUris(limit: Int): List<String> {
         return dao.getUrisByState(MediaSyncState.FAILED.name, limit)
+    }
+
+    suspend fun getOverview(): SyncOverview {
+        return SyncOverview(
+            pending = dao.countByState(MediaSyncState.PENDING.name),
+            syncing = dao.countByState(MediaSyncState.SYNCING.name),
+            synced = dao.countByState(MediaSyncState.SYNCED.name),
+            failed = dao.countByState(MediaSyncState.FAILED.name),
+            skipped = dao.countByState(MediaSyncState.SKIPPED.name),
+            unknown = dao.countUnknownState(),
+        )
     }
 
     suspend fun clearAll() {

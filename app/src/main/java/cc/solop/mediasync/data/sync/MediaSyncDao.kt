@@ -22,6 +22,12 @@ interface MediaSyncDao {
     @Query("SELECT uri FROM media_sync_items WHERE state NOT IN ('PENDING', 'SYNCING', 'SYNCED', 'FAILED', 'SKIPPED') LIMIT :limit")
     suspend fun getUrisWithUnknownState(limit: Int): List<String>
 
+    @Query("SELECT COUNT(*) FROM media_sync_items WHERE state = :state")
+    suspend fun countByState(state: String): Int
+
+    @Query("SELECT COUNT(*) FROM media_sync_items WHERE state NOT IN ('PENDING', 'SYNCING', 'SYNCED', 'FAILED', 'SKIPPED')")
+    suspend fun countUnknownState(): Int
+
     @Query("UPDATE media_sync_items SET state = :state, lastError = :lastError, updatedAtMs = :updatedAtMs WHERE uri = :uri")
     suspend fun updateState(uri: String, state: String, lastError: String?, updatedAtMs: Long): Int
 

@@ -88,7 +88,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import cc.solop.mediasync.data.api.LoginRequest
-import cc.solop.mediasync.data.repo.SyncStatus
+import cc.solop.mediasync.data.sync.MediaSyncStore
 import cc.solop.mediasync.data.sync.MediaSyncState as DbMediaSyncState
 import cc.solop.mediasync.di.ServiceLocator
 import cc.solop.mediasync.workers.WorkScheduler
@@ -178,12 +178,6 @@ class SyncStatusViewModel(
 
     val authToken: StateFlow<String> = services.tokenStore.tokenFlow
 
-    val status: StateFlow<SyncStatus> = services.syncStatusRepository.statusFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SyncStatus(),
-    )
-
     val uploadWorkSummary: StateFlow<WorkSummary> =
         workManager.getWorkInfosByTagFlow(WorkScheduler.TAG_UPLOAD)
             .map { infos ->
@@ -221,9 +215,12 @@ class SyncStatusViewModel(
     val isLoadingLocalMedia: StateFlow<Boolean> = _isLoadingLocalMedia
     private val _isSyncPaused = MutableStateFlow(false)
     val isSyncPaused: StateFlow<Boolean> = _isSyncPaused
+    private val _syncOverview = MutableStateFlow(MediaSyncStore.SyncOverview())
+    val syncOverview: StateFlow<MediaSyncStore.SyncOverview> = _syncOverview
     private var mediaStoreObserver: ContentObserver? = null
     private var mediaStoreDebounceJob: Job? = null
     private var reconcileJob: Job? = null
+    private var watchdogJob: Job? = null
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -253,6 +250,7 @@ class SyncStatusViewModel(
         viewModelScope.launch {
             WorkScheduler.clearQueue(appContext)
             services.syncStatusRepository.clearQueuedCount()
+            refreshOverview()
         }
     }
 
@@ -324,6 +322,7 @@ class SyncStatusViewModel(
                     WorkScheduler.enqueueUpload(appContext, candidate, replaceExisting = true)
                 }
             }
+            refreshOverview()
         }
     }
 
@@ -334,7 +333,31 @@ class SyncStatusViewModel(
             services.mediaSyncStore.clearAll()
             WorkScheduler.resumeSync(appContext)
             _isSyncPaused.value = false
+            refreshOverview()
             loadLocalMedia()
+        }
+    }
+
+    fun setWatchdogEnabled(enabled: Boolean) {
+        if (!enabled) {
+            watchdogJob?.cancel()
+            watchdogJob = null
+            return
+        }
+        if (watchdogJob?.isActive == true) return
+        watchdogJob = viewModelScope.launch {
+            while (true) {
+                delay(10_000)
+                val hasActiveWork = scanWorkSummary.value.running > 0 ||
+                    scanWorkSummary.value.enqueued > 0 ||
+                    uploadWorkSummary.value.running > 0 ||
+                    uploadWorkSummary.value.enqueued > 0
+                if (!hasActiveWork) {
+                    reconcileStuckUploads(includeFailed = false)
+                    refreshVisibleStatuses()
+                }
+                refreshOverview()
+            }
         }
     }
 
@@ -367,6 +390,7 @@ class SyncStatusViewModel(
 
     fun loadLocalMedia() {
         viewModelScope.launch {
+            if (_isLoadingLocalMedia.value) return@launch
             _isLoadingLocalMedia.value = true
             try {
                 val local = services.mediaStoreScanner.listRecentMedia(
@@ -416,10 +440,32 @@ class SyncStatusViewModel(
                         syncState = syncState,
                     )
                 }
+                refreshOverview()
             } finally {
                 _isLoadingLocalMedia.value = false
             }
         }
+    }
+
+    private suspend fun refreshVisibleStatuses() {
+        val current = _localMedia.value
+        if (current.isEmpty()) return
+        val statesByUri = services.mediaSyncStore.getStateMap(current.map { it.uri })
+        _localMedia.value = current.map { item ->
+            val dbState = statesByUri[item.uri]
+            val mapped = when {
+                services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> MediaSyncState.SYNCED
+                dbState == DbMediaSyncState.SYNCED || dbState == DbMediaSyncState.SKIPPED -> MediaSyncState.SYNCED
+                dbState == DbMediaSyncState.SYNCING -> MediaSyncState.SYNCING
+                dbState == DbMediaSyncState.FAILED -> MediaSyncState.FAILED
+                else -> MediaSyncState.PENDING
+            }
+            if (mapped == item.syncState) item else item.copy(syncState = mapped)
+        }
+    }
+
+    private suspend fun refreshOverview() {
+        _syncOverview.value = services.mediaSyncStore.getOverview()
     }
 
     suspend fun login(email: String, password: String): String? {
@@ -464,9 +510,9 @@ class SyncStatusViewModel(
 
 @Composable
 private fun MainScreen(vm: SyncStatusViewModel) {
-    val status by vm.status.collectAsStateWithLifecycle()
     val uploadWorkSummary by vm.uploadWorkSummary.collectAsStateWithLifecycle()
     val scanWorkSummary by vm.scanWorkSummary.collectAsStateWithLifecycle()
+    val syncOverview by vm.syncOverview.collectAsStateWithLifecycle()
     val authToken by vm.authToken.collectAsStateWithLifecycle()
     val localMedia by vm.localMedia.collectAsStateWithLifecycle()
     val isLoadingLocalMedia by vm.isLoadingLocalMedia.collectAsStateWithLifecycle()
@@ -484,6 +530,10 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             vm.validateTokenOnLoad()
             vm.syncNow()
         }
+    }
+
+    LaunchedEffect(isLoggedIn, isSyncPaused) {
+        vm.setWatchdogEnabled(enabled = isLoggedIn && !isSyncPaused)
     }
 
     DisposableEffect(isLoggedIn) {
@@ -518,14 +568,6 @@ private fun MainScreen(vm: SyncStatusViewModel) {
         }
     }
 
-    LaunchedEffect(status.uploadedCount, status.duplicateCount, hasActiveWork, authToken) {
-        if (authToken.isNotBlank() && !hasActiveWork) {
-            // Ensure latest uploaded/duplicate item badges are reflected even if worker-state transitions are missed.
-            delay(200)
-            vm.loadLocalMedia()
-        }
-    }
-
     if (!isLoggedIn) {
         LoginScreen(
             email = email,
@@ -550,7 +592,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
         )
     } else {
         SyncDashboardScreen(
-            status = status,
+            syncOverview = syncOverview,
             uploadWorkSummary = uploadWorkSummary,
             scanWorkSummary = scanWorkSummary,
             localMedia = localMedia,
@@ -739,7 +781,7 @@ private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
 
 @Composable
 private fun SyncDashboardScreen(
-    status: SyncStatus,
+    syncOverview: MediaSyncStore.SyncOverview,
     uploadWorkSummary: SyncStatusViewModel.WorkSummary,
     scanWorkSummary: SyncStatusViewModel.WorkSummary,
     localMedia: List<SyncStatusViewModel.LocalMediaStatus>,
@@ -751,10 +793,7 @@ private fun SyncDashboardScreen(
     onLogout: () -> Unit,
 ) {
     val displayedMedia = localMedia.take(120)
-    val displayedSynced = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.SYNCED }
-    val displayedSyncing = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.SYNCING }
-    val displayedPending = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.PENDING }
-    val displayedFailed = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.FAILED }
+    val syncedCount = syncOverview.synced + syncOverview.skipped
 
     Scaffold { padding ->
         Column(
@@ -796,9 +835,16 @@ private fun SyncDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        "Shown: Pending $displayedPending • Syncing $displayedSyncing • Synced $displayedSynced • Failed $displayedFailed",
+                        "All: Pending ${syncOverview.pending} • Syncing ${syncOverview.syncing} • Synced $syncedCount • Failed ${syncOverview.failed}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    if (syncOverview.unknown > 0) {
+                        Text(
+                            "Recovering ${syncOverview.unknown} legacy items...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         "Scan r:${scanWorkSummary.running} q:${scanWorkSummary.enqueued} b:${scanWorkSummary.blocked} • Upload r:${uploadWorkSummary.running} q:${uploadWorkSummary.enqueued} b:${uploadWorkSummary.blocked}",
                         style = MaterialTheme.typography.bodySmall,
@@ -870,62 +916,6 @@ private fun SyncDashboardScreen(
                     ) {
                         items(displayedMedia, key = { it.uri }) { item ->
                             LocalMediaPreviewCard(item = item)
-                        }
-                    }
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("Recent uploaded", style = MaterialTheme.typography.titleMedium)
-                    Column(
-                        modifier = Modifier.heightIn(max = 180.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (status.uploadedItems.isEmpty() && status.uploadedCount > 0) {
-                            Text(
-                                "No detailed uploaded records available from earlier app versions.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        status.uploadedItems.forEach { uploaded ->
-                            ActivityRow(
-                                title = uploaded.key,
-                                subtitle = uploaded.uri,
-                                icon = { Icon(Icons.Filled.CloudUpload, contentDescription = null) },
-                            )
-                        }
-                    }
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("Recent failed", style = MaterialTheme.typography.titleMedium)
-                    Column(
-                        modifier = Modifier.heightIn(max = 180.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        status.failedItems.forEach { failed ->
-                            ActivityRow(
-                                title = failed.reason,
-                                subtitle = failed.uri,
-                                icon = { Icon(Icons.Filled.ErrorOutline, contentDescription = null) },
-                            )
                         }
                     }
                 }
