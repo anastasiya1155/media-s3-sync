@@ -71,7 +71,7 @@ class SyncStatusRepository(private val context: Context) {
             queuedCount = prefs[keyQueued] ?: 0,
             uploadedCount = prefs[keyUploaded] ?: 0,
             duplicateCount = prefs[keyDuplicate] ?: 0,
-            failedCount = prefs[keyFailed] ?: 0,
+            failedCount = failedItems.map { it.uri }.distinct().size.toLong(),
             uploadedItems = uploadedItems,
             failedItems = failedItems,
             lastScanEpochMs = prefs[keyLastScanEpochMs] ?: 0,
@@ -90,6 +90,9 @@ class SyncStatusRepository(private val context: Context) {
             val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
             queued.addAll(uris)
             prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            val failed = decodeFailedItems(prefs[keyFailedItems]).filterNot { uris.contains(it.uri) }
+            prefs[keyFailedItems] = encodeFailedItems(failed.take(MAX_FAILED_ITEMS))
+            prefs[keyFailed] = failed.map { it.uri }.distinct().size.toLong()
         }
     }
 
@@ -112,6 +115,9 @@ class SyncStatusRepository(private val context: Context) {
             queued.add(uri)
             prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
             prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+            val failed = decodeFailedItems(prefs[keyFailedItems]).filterNot { it.uri == uri }
+            prefs[keyFailedItems] = encodeFailedItems(failed.take(MAX_FAILED_ITEMS))
+            prefs[keyFailed] = failed.map { it.uri }.distinct().size.toLong()
         }
     }
 
@@ -125,6 +131,9 @@ class SyncStatusRepository(private val context: Context) {
             running.remove(uri)
             prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
             prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+            val failed = decodeFailedItems(prefs[keyFailedItems]).filterNot { it.uri == uri }
+            prefs[keyFailedItems] = encodeFailedItems(failed.take(MAX_FAILED_ITEMS))
+            prefs[keyFailed] = failed.map { it.uri }.distinct().size.toLong()
             val synced = prefs[keySyncedUris]
                 ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
                 ?: emptyList()
@@ -155,6 +164,9 @@ class SyncStatusRepository(private val context: Context) {
                 running.remove(uri)
                 prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
                 prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+                val failed = decodeFailedItems(prefs[keyFailedItems]).filterNot { it.uri == uri }
+                prefs[keyFailedItems] = encodeFailedItems(failed.take(MAX_FAILED_ITEMS))
+                prefs[keyFailed] = failed.map { it.uri }.distinct().size.toLong()
             }
             if (!uri.isNullOrBlank()) {
                 val synced = prefs[keySyncedUris]
@@ -171,22 +183,17 @@ class SyncStatusRepository(private val context: Context) {
     suspend fun incrementFailed(uri: String, reason: String) {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
-            prefs[keyFailed] = (prefs[keyFailed] ?: 0) + 1
             val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
             val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
             queued.remove(uri)
             running.remove(uri)
             prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
             prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
-            val existing = prefs[keyFailedItems]
-                ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
-                ?: emptyList()
+            val existing = decodeFailedItems(prefs[keyFailedItems]).filterNot { it.uri == uri }
             val updated = (listOf(FailedUploadItem(uri, reason, System.currentTimeMillis())) + existing)
                 .take(MAX_FAILED_ITEMS)
-            prefs[keyFailedItems] = json.encodeToString(
-                ListSerializer(FailedUploadItem.serializer()),
-                updated
-            )
+            prefs[keyFailedItems] = encodeFailedItems(updated)
+            prefs[keyFailed] = updated.map { it.uri }.distinct().size.toLong()
         }
     }
 
@@ -305,6 +312,14 @@ class SyncStatusRepository(private val context: Context) {
 
     private fun encodeStringList(values: Collection<String>): String {
         return json.encodeToString(ListSerializer(String.serializer()), values.toList())
+    }
+
+    private fun decodeFailedItems(raw: String?): List<FailedUploadItem> {
+        return raw?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() } ?: emptyList()
+    }
+
+    private fun encodeFailedItems(values: Collection<FailedUploadItem>): String {
+        return json.encodeToString(ListSerializer(FailedUploadItem.serializer()), values.toList())
     }
 
     private companion object {

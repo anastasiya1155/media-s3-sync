@@ -314,7 +314,7 @@ class SyncStatusViewModel(
                     services.syncStatusRepository.removeTransientUri(uri)
                 } else {
                     services.syncStatusRepository.addQueuedUris(listOf(uri))
-                    WorkScheduler.enqueueUpload(appContext, candidate)
+                    WorkScheduler.enqueueUpload(appContext, candidate, replaceExisting = true)
                 }
             }
         }

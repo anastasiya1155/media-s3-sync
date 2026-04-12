@@ -47,7 +47,7 @@ object WorkScheduler {
         WorkManager.getInstance(context).enqueue(request)
     }
 
-    fun enqueueUpload(context: Context, candidate: MediaCandidate) {
+    fun enqueueUpload(context: Context, candidate: MediaCandidate, replaceExisting: Boolean = false) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.UNMETERED)
             .build()
@@ -60,7 +60,11 @@ object WorkScheduler {
             .build()
 
         val uniqueName = "UPLOAD_${candidate.stableId}"
-        WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            uniqueName,
+            if (replaceExisting) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     fun stopAllSync(context: Context) {
