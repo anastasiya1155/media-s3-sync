@@ -53,6 +53,8 @@ class SyncStatusRepository(private val context: Context) {
     private val keyUploadedItems = stringPreferencesKey("uploaded_items_json")
     private val keyFailedItems = stringPreferencesKey("failed_items_json")
     private val keySyncedUris = stringPreferencesKey("synced_uris_json")
+    private val keyQueuedUris = stringPreferencesKey("queued_uris_json")
+    private val keyRunningUris = stringPreferencesKey("running_uris_json")
     private val keyLastScanEpochMs = longPreferencesKey("last_scan_epoch_ms")
     private val keyLastScanDateAddedSec = longPreferencesKey("last_scan_date_added_sec")
     private val keyLastScanMediaId = longPreferencesKey("last_scan_media_id")
@@ -82,10 +84,47 @@ class SyncStatusRepository(private val context: Context) {
         }
     }
 
+    suspend fun addQueuedUris(uris: Collection<String>) {
+        if (uris.isEmpty()) return
+        context.appDataStore.edit { prefs ->
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            queued.addAll(uris)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+        }
+    }
+
+    suspend fun markRunning(uri: String) {
+        context.appDataStore.edit { prefs ->
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+            queued.remove(uri)
+            running.add(uri)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+        }
+    }
+
+    suspend fun markRetryPending(uri: String) {
+        context.appDataStore.edit { prefs ->
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+            running.remove(uri)
+            queued.add(uri)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+        }
+    }
+
     suspend fun incrementUploaded(uri: String, key: String) {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyUploaded] = (prefs[keyUploaded] ?: 0) + 1
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+            queued.remove(uri)
+            running.remove(uri)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
             val synced = prefs[keySyncedUris]
                 ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
                 ?: emptyList()
@@ -110,6 +149,14 @@ class SyncStatusRepository(private val context: Context) {
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyDuplicate] = (prefs[keyDuplicate] ?: 0) + 1
             if (!uri.isNullOrBlank()) {
+                val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+                val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+                queued.remove(uri)
+                running.remove(uri)
+                prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+                prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
+            }
+            if (!uri.isNullOrBlank()) {
                 val synced = prefs[keySyncedUris]
                     ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
                     ?: emptyList()
@@ -125,6 +172,12 @@ class SyncStatusRepository(private val context: Context) {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = ((prefs[keyQueued] ?: 0) - 1).coerceAtLeast(0)
             prefs[keyFailed] = (prefs[keyFailed] ?: 0) + 1
+            val queued = decodeStringList(prefs[keyQueuedUris]).toMutableSet()
+            val running = decodeStringList(prefs[keyRunningUris]).toMutableSet()
+            queued.remove(uri)
+            running.remove(uri)
+            prefs[keyQueuedUris] = encodeStringList(queued.take(MAX_TRANSIENT_URIS))
+            prefs[keyRunningUris] = encodeStringList(running.take(MAX_TRANSIENT_URIS))
             val existing = prefs[keyFailedItems]
                 ?.let { runCatching { json.decodeFromString<List<FailedUploadItem>>(it) }.getOrNull() }
                 ?: emptyList()
@@ -175,12 +228,16 @@ class SyncStatusRepository(private val context: Context) {
             // Ensure we don't include any already-existing item in the same second.
             prefs[keyLastScanMediaId] = Long.MAX_VALUE
             prefs[keyQueued] = 0L
+            prefs.remove(keyQueuedUris)
+            prefs.remove(keyRunningUris)
         }
     }
 
     suspend fun clearQueuedCount() {
         context.appDataStore.edit { prefs ->
             prefs[keyQueued] = 0L
+            prefs.remove(keyQueuedUris)
+            prefs.remove(keyRunningUris)
         }
     }
 
@@ -193,6 +250,8 @@ class SyncStatusRepository(private val context: Context) {
             prefs.remove(keyUploadedItems)
             prefs.remove(keyFailedItems)
             prefs.remove(keySyncedUris)
+            prefs.remove(keyQueuedUris)
+            prefs.remove(keyRunningUris)
             prefs[keyLastScanEpochMs] = 0L
             prefs[keyLastScanDateAddedSec] = 0L
             prefs[keyLastScanMediaId] = 0L
@@ -219,9 +278,28 @@ class SyncStatusRepository(private val context: Context) {
         return failed.map { it.uri }.toSet()
     }
 
+    suspend fun getQueuedUrisSet(): Set<String> {
+        val prefs = context.appDataStore.data.first()
+        return decodeStringList(prefs[keyQueuedUris]).toSet()
+    }
+
+    suspend fun getRunningUrisSet(): Set<String> {
+        val prefs = context.appDataStore.data.first()
+        return decodeStringList(prefs[keyRunningUris]).toSet()
+    }
+
+    private fun decodeStringList(raw: String?): List<String> {
+        return raw?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
+    }
+
+    private fun encodeStringList(values: Collection<String>): String {
+        return json.encodeToString(ListSerializer(String.serializer()), values.toList())
+    }
+
     private companion object {
         const val MAX_FAILED_ITEMS = 200
         const val MAX_UPLOADED_ITEMS = 200
         const val MAX_SYNCED_URIS = 10_000
+        const val MAX_TRANSIENT_URIS = 20_000
     }
 }

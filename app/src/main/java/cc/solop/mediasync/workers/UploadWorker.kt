@@ -36,6 +36,7 @@ class UploadWorker(
         }
 
         return try {
+            statusRepo.markRunning(candidate.uri)
             setForeground(createForegroundInfo(candidate))
             Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
             when (val result = services.uploadOrchestrator.upload(candidate)) {
@@ -50,6 +51,7 @@ class UploadWorker(
                 statusRepo.incrementFailed(candidate.uri, "Retry limit reached: ${e.message ?: "Unknown error"}")
                 Result.failure()
             } else {
+                statusRepo.markRetryPending(candidate.uri)
                 Result.retry()
             }
         } catch (e: PermanentUploadException) {
@@ -62,6 +64,7 @@ class UploadWorker(
                 statusRepo.incrementFailed(candidate.uri, "Unexpected error: ${e.message ?: "Unknown error"}")
                 Result.failure()
             } else {
+                statusRepo.markRetryPending(candidate.uri)
                 Result.retry()
             }
         }

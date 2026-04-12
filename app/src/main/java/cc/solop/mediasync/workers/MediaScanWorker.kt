@@ -25,6 +25,7 @@ class MediaScanWorker(
 
             if (candidates.isNotEmpty()) {
                 statusRepo.incrementQueued(candidates.size.toLong())
+                statusRepo.addQueuedUris(candidates.map { it.uri })
                 val last = candidates.last()
                 statusRepo.setScanCursor(
                     dateAddedSec = last.dateAddedEpochMs / 1000L,
