@@ -725,6 +725,12 @@ private fun SyncDashboardScreen(
     onRefreshMediaStatus: () -> Unit,
     onLogout: () -> Unit,
 ) {
+    val displayedMedia = localMedia.take(120)
+    val displayedSynced = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.SYNCED }
+    val displayedSyncing = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.SYNCING }
+    val displayedPending = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.PENDING }
+    val displayedFailed = displayedMedia.count { it.syncState == SyncStatusViewModel.MediaSyncState.FAILED }
+
     Scaffold { padding ->
         Column(
             modifier = Modifier
@@ -765,7 +771,7 @@ private fun SyncDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        "Pending ${status.queuedCount} • Uploaded ${status.uploadedCount} • Duplicates ${status.duplicateCount} • Failed ${status.failedCount}",
+                        "Shown: Pending $displayedPending • Syncing $displayedSyncing • Synced $displayedSynced • Failed $displayedFailed",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -837,7 +843,7 @@ private fun SyncDashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(0.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
-                        items(localMedia.take(120), key = { it.uri }) { item ->
+                        items(displayedMedia, key = { it.uri }) { item ->
                             LocalMediaPreviewCard(item = item)
                         }
                     }
