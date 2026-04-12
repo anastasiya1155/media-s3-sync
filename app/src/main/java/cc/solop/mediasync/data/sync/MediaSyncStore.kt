@@ -24,12 +24,29 @@ class MediaSyncStore(private val dao: MediaSyncDao) {
     }
 
     suspend fun markState(uri: String, state: MediaSyncState, lastError: String? = null) {
-        dao.updateState(
+        val now = System.currentTimeMillis()
+        val updated = dao.updateState(
             uri = uri,
             state = state.name,
             lastError = lastError,
-            updatedAtMs = System.currentTimeMillis(),
+            updatedAtMs = now,
         )
+        if (updated == 0) {
+            dao.upsert(
+                listOf(
+                    MediaSyncItemEntity(
+                        uri = uri,
+                        state = state.name,
+                        filename = uri.substringAfterLast('/').ifBlank { "media" },
+                        mimeType = "application/octet-stream",
+                        capturedAtIso = "",
+                        sizeBytes = 0L,
+                        lastError = lastError,
+                        updatedAtMs = now,
+                    )
+                )
+            )
+        }
     }
 
     suspend fun getStateMap(uris: List<String>): Map<String, MediaSyncState> {
@@ -41,6 +58,15 @@ class MediaSyncStore(private val dao: MediaSyncDao) {
 
     suspend fun getPendingUris(limit: Int): List<String> {
         return dao.getUrisByState(MediaSyncState.PENDING.name, limit)
+    }
+
+    suspend fun getResumableUris(limit: Int): List<String> {
+        if (limit <= 0) return emptyList()
+        val activeStates = listOf(MediaSyncState.PENDING.name, MediaSyncState.SYNCING.name)
+        val known = dao.getUrisByStates(activeStates, limit)
+        if (known.size >= limit) return known
+        val unknown = dao.getUrisWithUnknownState(limit - known.size)
+        return (known + unknown).distinct().take(limit)
     }
 
     suspend fun getFailedUris(limit: Int): List<String> {

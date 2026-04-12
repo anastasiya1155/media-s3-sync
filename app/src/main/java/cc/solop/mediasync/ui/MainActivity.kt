@@ -310,7 +310,7 @@ class SyncStatusViewModel(
     fun reconcileStuckUploads(includeFailed: Boolean) {
         if (reconcileJob?.isActive == true) return
         reconcileJob = viewModelScope.launch {
-            val queuedUris = services.mediaSyncStore.getPendingUris(limit = 100)
+            val queuedUris = services.mediaSyncStore.getResumableUris(limit = 100)
             val retryUris = if (includeFailed) services.mediaSyncStore.getFailedUris(limit = 100) else emptyList()
             val targets = (queuedUris + retryUris).distinct().take(100)
             if (targets.isEmpty()) return@launch
@@ -372,7 +372,30 @@ class SyncStatusViewModel(
                 val local = services.mediaStoreScanner.listRecentMedia(
                     limit = 300,
                 )
-                val statesByUri = services.mediaSyncStore.getStateMap(local.map { it.uri })
+                val uris = local.map { it.uri }
+                val legacySyncedUris = services.syncStatusRepository.getSyncedUrisSet()
+                val legacyFailedUris = services.syncStatusRepository.getFailedUrisSet()
+                val statesByUriInitial = services.mediaSyncStore.getStateMap(uris)
+                val missingUris = uris.filterNot { statesByUriInitial.containsKey(it) }
+                if (missingUris.isNotEmpty()) {
+                    // Backfill Room states from legacy status data so pre-Room synced items don't appear as pending.
+                    local.filter { missingUris.contains(it.uri) }.forEach { item ->
+                        when {
+                            services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) ->
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SKIPPED)
+                            legacySyncedUris.contains(item.uri) ->
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SYNCED)
+                            legacyFailedUris.contains(item.uri) ->
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.FAILED)
+                            else -> {
+                                services.mediaStoreScanner.resolveCandidate(item.uri)?.let { candidate ->
+                                    services.mediaSyncStore.markPending(listOf(candidate))
+                                }
+                            }
+                        }
+                    }
+                }
+                val statesByUri = services.mediaSyncStore.getStateMap(uris)
                 _localMedia.value = local.map { item ->
                     val dbState = statesByUri[item.uri]
                     val syncState = when {
