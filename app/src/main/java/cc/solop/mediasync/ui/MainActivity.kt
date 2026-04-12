@@ -82,6 +82,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -221,11 +224,22 @@ class SyncStatusViewModel(
     private var mediaStoreDebounceJob: Job? = null
     private var reconcileJob: Job? = null
     private var watchdogJob: Job? = null
+    private var lastForegroundRefreshMs: Long = 0L
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
         reconcileStuckUploads(includeFailed = true)
         loadLocalMedia()
+    }
+
+    fun onAppForegrounded() {
+        val now = System.currentTimeMillis()
+        if (now - lastForegroundRefreshMs < 2_000L) return
+        lastForegroundRefreshMs = now
+        loadLocalMedia()
+        if (_isSyncPaused.value) return
+        WorkScheduler.enqueueScanNow(appContext)
+        reconcileStuckUploads(includeFailed = false)
     }
 
     fun refreshStatuses() {
@@ -523,6 +537,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     var isLoggingIn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val isLoggedIn = authToken.isNotBlank()
+    val lifecycleOwner = LocalLifecycleOwner.current
     var hadActiveWork by remember { mutableStateOf(false) }
 
     LaunchedEffect(authToken) {
@@ -534,6 +549,18 @@ private fun MainScreen(vm: SyncStatusViewModel) {
 
     LaunchedEffect(isLoggedIn, isSyncPaused) {
         vm.setWatchdogEnabled(enabled = isLoggedIn && !isSyncPaused)
+    }
+
+    DisposableEffect(lifecycleOwner, isLoggedIn) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START && isLoggedIn) {
+                vm.onAppForegrounded()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     DisposableEffect(isLoggedIn) {
