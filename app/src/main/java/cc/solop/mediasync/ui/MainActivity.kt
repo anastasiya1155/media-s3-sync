@@ -230,6 +230,11 @@ class SyncStatusViewModel(
         loadLocalMedia()
     }
 
+    fun refreshStatuses() {
+        reconcileStuckUploads(includeFailed = true)
+        loadLocalMedia()
+    }
+
     fun retryFailedNow() {
         viewModelScope.launch {
             services.syncStatusRepository.resetScanWatermark()
@@ -527,7 +532,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
             isSyncPaused = isSyncPaused,
             onStartFreshSync = { vm.startFreshSync() },
             onToggleSyncPause = { vm.toggleSyncPause() },
-            onRefreshMediaStatus = { vm.loadLocalMedia() },
+            onRefreshMediaStatus = { vm.refreshStatuses() },
             onLogout = {
                 vm.setToken("")
             },
