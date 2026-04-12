@@ -226,7 +226,7 @@ class SyncStatusViewModel(
     private var mediaStoreDebounceJob: Job? = null
     private var reconcileJob: Job? = null
     private var watchdogJob: Job? = null
-    private var lastForegroundRefreshMs: Long = 0L
+    private var foregroundRefreshJob: Job? = null
 
     fun syncNow() {
         WorkScheduler.enqueueScanNow(appContext)
@@ -235,10 +235,13 @@ class SyncStatusViewModel(
     }
 
     fun onAppForegrounded() {
-        val now = System.currentTimeMillis()
-        if (now - lastForegroundRefreshMs < 2_000L) return
-        lastForegroundRefreshMs = now
         loadLocalMedia()
+        foregroundRefreshJob?.cancel()
+        foregroundRefreshJob = viewModelScope.launch {
+            // Camera apps may publish media slightly after returning to this app.
+            delay(1_500)
+            loadLocalMedia()
+        }
         if (_isSyncPaused.value) return
         WorkScheduler.enqueueScanNow(appContext)
         reconcileStuckUploads(includeFailed = false)
@@ -309,6 +312,8 @@ class SyncStatusViewModel(
         mediaStoreObserver = null
         mediaStoreDebounceJob?.cancel()
         mediaStoreDebounceJob = null
+        foregroundRefreshJob?.cancel()
+        foregroundRefreshJob = null
     }
 
     private fun onMediaStoreChanged() {
