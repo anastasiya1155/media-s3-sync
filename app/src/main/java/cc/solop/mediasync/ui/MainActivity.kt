@@ -75,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -170,6 +171,7 @@ class SyncStatusViewModel(
         val mediaId: Long,
         val dateAddedSec: Long,
         val syncState: MediaSyncState,
+        val syncDetail: String? = null,
     )
 
     enum class MediaSyncState {
@@ -330,7 +332,7 @@ class SyncStatusViewModel(
                 val candidate = services.mediaStoreScanner.resolveCandidate(uri)
                 if (candidate == null) {
                     // Media item removed from device; no further sync work required.
-                    services.mediaSyncStore.markState(uri, DbMediaSyncState.SKIPPED)
+                    services.mediaSyncStore.markState(uri, DbMediaSyncState.SKIPPED, "Missing on device")
                 } else {
                     services.mediaSyncStore.markPending(listOf(candidate))
                     WorkScheduler.enqueueUpload(appContext, candidate, replaceExisting = true)
@@ -420,11 +422,11 @@ class SyncStatusViewModel(
                     local.filter { missingUris.contains(it.uri) }.forEach { item ->
                         when {
                             services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) ->
-                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SKIPPED)
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SKIPPED, "Before 2026-04-04")
                             legacySyncedUris.contains(item.uri) ->
-                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SYNCED)
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SYNCED, "Migrated as synced")
                             legacyFailedUris.contains(item.uri) ->
-                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.FAILED)
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.FAILED, "Migrated as failed")
                             else -> {
                                 services.mediaStoreScanner.resolveCandidate(item.uri)?.let { candidate ->
                                     services.mediaSyncStore.markPending(listOf(candidate))
@@ -433,9 +435,10 @@ class SyncStatusViewModel(
                         }
                     }
                 }
-                val statesByUri = services.mediaSyncStore.getStateMap(uris)
+                val statusesByUri = services.mediaSyncStore.getStatusMap(uris)
                 _localMedia.value = local.map { item ->
-                    val dbState = statesByUri[item.uri]
+                    val dbStatus = statusesByUri[item.uri]
+                    val dbState = dbStatus?.state
                     val syncState = when {
                         services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> MediaSyncState.SYNCED
                         dbState == DbMediaSyncState.SYNCED || dbState == DbMediaSyncState.SKIPPED -> MediaSyncState.SYNCED
@@ -452,6 +455,11 @@ class SyncStatusViewModel(
                         mediaId = item.mediaId,
                         dateAddedSec = item.dateAddedSec,
                         syncState = syncState,
+                        syncDetail = when {
+                            services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-04"
+                            dbStatus?.detail.isNullOrBlank() -> defaultDetailFor(syncState)
+                            else -> dbStatus?.detail
+                        },
                     )
                 }
                 refreshOverview()
@@ -464,9 +472,10 @@ class SyncStatusViewModel(
     private suspend fun refreshVisibleStatuses() {
         val current = _localMedia.value
         if (current.isEmpty()) return
-        val statesByUri = services.mediaSyncStore.getStateMap(current.map { it.uri })
+        val statusesByUri = services.mediaSyncStore.getStatusMap(current.map { it.uri })
         _localMedia.value = current.map { item ->
-            val dbState = statesByUri[item.uri]
+            val dbStatus = statusesByUri[item.uri]
+            val dbState = dbStatus?.state
             val mapped = when {
                 services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> MediaSyncState.SYNCED
                 dbState == DbMediaSyncState.SYNCED || dbState == DbMediaSyncState.SKIPPED -> MediaSyncState.SYNCED
@@ -474,7 +483,25 @@ class SyncStatusViewModel(
                 dbState == DbMediaSyncState.FAILED -> MediaSyncState.FAILED
                 else -> MediaSyncState.PENDING
             }
-            if (mapped == item.syncState) item else item.copy(syncState = mapped)
+            val detail = when {
+                services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-04"
+                dbStatus?.detail.isNullOrBlank() -> defaultDetailFor(mapped)
+                else -> dbStatus?.detail
+            }
+            if (mapped == item.syncState && detail == item.syncDetail) {
+                item
+            } else {
+                item.copy(syncState = mapped, syncDetail = detail)
+            }
+        }
+    }
+
+    private fun defaultDetailFor(state: MediaSyncState): String {
+        return when (state) {
+            MediaSyncState.PENDING -> "Pending upload"
+            MediaSyncState.SYNCING -> "Uploading"
+            MediaSyncState.SYNCED -> "Synced"
+            MediaSyncState.FAILED -> "Failed"
         }
     }
 
@@ -1023,6 +1050,23 @@ private fun LocalMediaPreviewCard(
                     .padding(2.dp)
                     .size(11.dp),
             )
+        }
+        if (!item.syncDetail.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomStart)
+                    .padding(3.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+            ) {
+                Text(
+                    text = item.syncDetail,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
         }
     }
 }

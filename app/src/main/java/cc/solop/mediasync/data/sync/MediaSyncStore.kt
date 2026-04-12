@@ -3,6 +3,11 @@ package cc.solop.mediasync.data.sync
 import cc.solop.mediasync.data.media.MediaCandidate
 
 class MediaSyncStore(private val dao: MediaSyncDao) {
+    data class ItemStatus(
+        val state: MediaSyncState,
+        val detail: String?,
+    )
+
     data class SyncOverview(
         val pending: Int = 0,
         val syncing: Int = 0,
@@ -24,7 +29,7 @@ class MediaSyncStore(private val dao: MediaSyncDao) {
                     mimeType = it.mimeType,
                     capturedAtIso = it.capturedAtIso,
                     sizeBytes = it.sizeBytes,
-                    lastError = null,
+                    lastError = "Pending upload",
                     updatedAtMs = now,
                 )
             }
@@ -61,6 +66,17 @@ class MediaSyncStore(private val dao: MediaSyncDao) {
         if (uris.isEmpty()) return emptyMap()
         return dao.getByUris(uris).associate { row ->
             row.uri to runCatching { MediaSyncState.valueOf(row.state) }.getOrDefault(MediaSyncState.PENDING)
+        }
+    }
+
+    suspend fun getStatusMap(uris: List<String>): Map<String, ItemStatus> {
+        if (uris.isEmpty()) return emptyMap()
+        return dao.getByUris(uris).associate { row ->
+            val parsedState = runCatching { MediaSyncState.valueOf(row.state) }.getOrDefault(MediaSyncState.PENDING)
+            row.uri to ItemStatus(
+                state = parsedState,
+                detail = row.lastError?.takeIf { it.isNotBlank() },
+            )
         }
     }
 

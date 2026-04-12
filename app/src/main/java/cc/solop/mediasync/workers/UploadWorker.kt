@@ -39,17 +39,17 @@ class UploadWorker(
 
         return try {
             statusRepo.markRunning(candidate.uri)
-            services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCING)
+            services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCING, "Uploading")
             setForeground(createForegroundInfo(candidate))
             Log.d(TAG, "Starting upload, uri=${candidate.uri}, attempt=${runAttemptCount + 1}")
             when (val result = services.uploadOrchestrator.upload(candidate)) {
                 is UploadResult.Uploaded -> {
                     statusRepo.incrementUploaded(candidate.uri, result.key)
-                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCED)
+                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SYNCED, "Uploaded")
                 }
                 UploadResult.Duplicate -> {
                     statusRepo.incrementDuplicate(candidate.uri)
-                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SKIPPED)
+                    services.mediaSyncStore.markState(candidate.uri, MediaSyncState.SKIPPED, "Duplicate on server")
                 }
             }
             Log.d(TAG, "Upload success, uri=${candidate.uri}")
@@ -62,7 +62,11 @@ class UploadWorker(
                 Result.failure()
             } else {
                 statusRepo.markRetryPending(candidate.uri)
-                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.PENDING)
+                services.mediaSyncStore.markState(
+                    candidate.uri,
+                    MediaSyncState.PENDING,
+                    "Retrying (${runAttemptCount + 1}/$MAX_RETRY_ATTEMPTS)",
+                )
                 Result.retry()
             }
         } catch (e: PermanentUploadException) {
@@ -78,7 +82,11 @@ class UploadWorker(
                 Result.failure()
             } else {
                 statusRepo.markRetryPending(candidate.uri)
-                services.mediaSyncStore.markState(candidate.uri, MediaSyncState.PENDING)
+                services.mediaSyncStore.markState(
+                    candidate.uri,
+                    MediaSyncState.PENDING,
+                    "Retrying (${runAttemptCount + 1}/$MAX_RETRY_ATTEMPTS)",
+                )
                 Result.retry()
             }
         }
