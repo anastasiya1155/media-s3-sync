@@ -11,11 +11,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cc.solop.mediasync"
+        applicationId = "cc.solop.mediasync.debug"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.1"
         buildConfigField("String", "API_BASE_URL", "\"https://pa2021.solop.cc/\"")
         buildConfigField("String", "DEFAULT_AUTH_TOKEN", "\"\"")
 

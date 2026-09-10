@@ -431,7 +431,7 @@ class SyncStatusViewModel(
                     local.filter { missingUris.contains(it.uri) }.forEach { item ->
                         when {
                             services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) ->
-                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SKIPPED, "Before 2026-04-04")
+                                services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SKIPPED, "Before 2026-04-13")
                             legacySyncedUris.contains(item.uri) ->
                                 services.mediaSyncStore.markState(item.uri, DbMediaSyncState.SYNCED, "Migrated as synced")
                             legacyFailedUris.contains(item.uri) ->
@@ -465,7 +465,7 @@ class SyncStatusViewModel(
                         dateAddedSec = item.dateAddedSec,
                         syncState = syncState,
                         syncDetail = when {
-                            services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-04"
+                            services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-13"
                             dbStatus?.detail.isNullOrBlank() -> defaultDetailFor(syncState)
                             else -> dbStatus?.detail
                         },
@@ -493,7 +493,7 @@ class SyncStatusViewModel(
                 else -> MediaSyncState.PENDING
             }
             val detail = when {
-                services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-04"
+                services.mediaStoreScanner.isBeforeSyncStart(item.dateAddedSec) -> "Before 2026-04-13"
                 dbStatus?.detail.isNullOrBlank() -> defaultDetailFor(mapped)
                 else -> dbStatus?.detail
             }

@@ -195,7 +195,7 @@ class MediaStoreScanner(private val context: Context) {
 
     private companion object {
         val ISO_INSTANT: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT.withZone(ZoneOffset.UTC)
-        val MIN_SYNC_DATE_ADDED_SEC: Long = LocalDate.parse("2026-04-04")
+        val MIN_SYNC_DATE_ADDED_SEC: Long = LocalDate.parse("2026-04-13")
             .atStartOfDay(ZoneOffset.UTC)
             .toEpochSecond()
     }
