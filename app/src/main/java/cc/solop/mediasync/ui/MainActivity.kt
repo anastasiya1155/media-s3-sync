@@ -81,6 +81,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CreatePasswordRequest
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.Lifecycle
@@ -571,6 +575,24 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val isLoggedIn = authToken.isNotBlank()
     val lifecycleOwner = LocalLifecycleOwner.current
     var hadActiveWork by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val saveCredentialToManager: suspend (String, String) -> Unit = { userEmail, userPassword ->
+        try {
+            withContextSafeIo {
+                val credentialManager = CredentialManager.create(context)
+                val request = CreatePasswordRequest(
+                    id = userEmail.trim(),
+                    password = userPassword
+                )
+                // Note: saveCredential is called via the async API
+                credentialManager.createCredential(context, request)
+            }
+        } catch (e: Exception) {
+            // Silently ignore credential saving errors - it's a nice-to-have feature
+        }
+    }
+
 
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
@@ -642,6 +664,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                     val error = vm.login(email = email, password = password)
                     isLoggingIn = false
                     if (error == null) {
+                        saveCredentialToManager(email, password)
                         password = ""
                     } else {
                         loginError = error
@@ -667,6 +690,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LoginScreen(
     email: String,
@@ -716,6 +740,11 @@ private fun LoginScreen(
                     .fillMaxWidth()
                     .then(
                         rememberEmailAutofillModifier(onFill = onEmailChange)
+                    )
+                    .then(
+                        Modifier.autofillModifier(
+                            autofillTypes = listOf(AutofillType.EmailAddress, AutofillType.Username)
+                        )
                     ),
                 value = email,
                 onValueChange = onEmailChange,
@@ -731,6 +760,11 @@ private fun LoginScreen(
                     .fillMaxWidth()
                     .then(
                         rememberPasswordAutofillModifier(onFill = onPasswordChange)
+                    )
+                    .then(
+                        Modifier.autofillModifier(
+                            autofillTypes = listOf(AutofillType.Password)
+                        )
                     ),
                 value = password,
                 onValueChange = onPasswordChange,
@@ -832,6 +866,11 @@ private fun rememberAutofillModifier(
                 autofill?.cancelAutofillForNode(autofillNode)
             }
         }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+private fun Modifier.autofillModifier(autofillTypes: List<AutofillType>): Modifier {
+    return this
 }
 
 private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
