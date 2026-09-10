@@ -82,6 +82,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.credentials.CredentialManager
+import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
@@ -574,6 +575,24 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     val isLoggedIn = authToken.isNotBlank()
     val lifecycleOwner = LocalLifecycleOwner.current
     var hadActiveWork by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val saveCredentialToManager: suspend (String, String) -> Unit = { userEmail, userPassword ->
+        try {
+            withContextSafeIo {
+                val credentialManager = CredentialManager.create(context)
+                val request = CreatePasswordRequest(
+                    id = userEmail.trim(),
+                    password = userPassword
+                )
+                // Note: saveCredential is called via the async API
+                credentialManager.createCredential(context, request)
+            }
+        } catch (e: Exception) {
+            // Silently ignore credential saving errors - it's a nice-to-have feature
+        }
+    }
+
 
     LaunchedEffect(authToken) {
         if (authToken.isNotBlank()) {
@@ -645,6 +664,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
                     val error = vm.login(email = email, password = password)
                     isLoggingIn = false
                     if (error == null) {
+                        saveCredentialToManager(email, password)
                         password = ""
                     } else {
                         loginError = error

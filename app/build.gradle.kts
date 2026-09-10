@@ -11,7 +11,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cc.solop.mediasync"
+        applicationId = "cc.solop.mediasync.debug"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
