@@ -670,6 +670,7 @@ private fun MainScreen(vm: SyncStatusViewModel) {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LoginScreen(
     email: String,
@@ -847,6 +848,7 @@ private fun rememberAutofillModifier(
         }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 private fun Modifier.autofillModifier(autofillTypes: List<AutofillType>): Modifier {
     return this
 }
