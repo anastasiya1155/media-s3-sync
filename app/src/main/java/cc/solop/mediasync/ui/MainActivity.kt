@@ -81,6 +81,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.Lifecycle
@@ -716,6 +719,11 @@ private fun LoginScreen(
                     .fillMaxWidth()
                     .then(
                         rememberEmailAutofillModifier(onFill = onEmailChange)
+                    )
+                    .then(
+                        Modifier.autofillModifier(
+                            autofillTypes = listOf(AutofillType.EmailAddress, AutofillType.Username)
+                        )
                     ),
                 value = email,
                 onValueChange = onEmailChange,
@@ -731,6 +739,11 @@ private fun LoginScreen(
                     .fillMaxWidth()
                     .then(
                         rememberPasswordAutofillModifier(onFill = onPasswordChange)
+                    )
+                    .then(
+                        Modifier.autofillModifier(
+                            autofillTypes = listOf(AutofillType.Password)
+                        )
                     ),
                 value = password,
                 onValueChange = onPasswordChange,
@@ -832,6 +845,10 @@ private fun rememberAutofillModifier(
                 autofill?.cancelAutofillForNode(autofillNode)
             }
         }
+}
+
+private fun Modifier.autofillModifier(autofillTypes: List<AutofillType>): Modifier {
+    return this
 }
 
 private suspend fun <T> withContextSafeIo(block: suspend () -> T): T {
