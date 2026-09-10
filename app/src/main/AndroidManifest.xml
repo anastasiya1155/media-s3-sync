@@ -12,7 +12,7 @@
 
     <application
         android:name=".app.MediaSyncApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@android:drawable/ic_menu_upload"
         android:label="Media Sync"
         android:roundIcon="@android:drawable/ic_menu_upload"

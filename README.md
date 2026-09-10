@@ -15,8 +15,9 @@ See architecture details in [ARCHITECTURE.md](./ARCHITECTURE.md).
 ## Setup
 1. Open this folder in Android Studio.
 2. Set your auth token in-app (MVP token field) or via `BuildConfig.DEFAULT_AUTH_TOKEN`.
-3. Run on Android device/emulator API 26+.
-4. Grant media read permissions.
+3. In-app tokens are stored in encrypted app storage and are not included in Android backups.
+4. Run on Android device/emulator API 26+.
+5. Grant media read permissions.
 
 ## Current phase
 Phase 1 scaffold implemented.
